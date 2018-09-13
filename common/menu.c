@@ -347,7 +347,8 @@ void drawBackBtn(menu_s* menu, bool emptyDir) {
     if (strcmp( menu->dirname, "/") != 0)
     #endif
     {
-        drawImage(x_image, 720 - 48, 32, 32, themeCurrent.buttonBImage, IMAGE_MODE_RGBA32);
+        //drawImage(x_image, 720 - 48, 32, 32, themeCurrent.buttonBImage, IMAGE_MODE_RGBA32);
+        DrawText(fontscale7, x_image, 720 - 47 + 26, themeCurrent.textColor, themeCurrent.buttonBText);//Display the 'B' button from SharedFont.
         DrawText(interuimedium20, x_text, 720 - 47 + 26, themeCurrent.textColor, textGetString(StrId_Actions_Back));
     }
 }
@@ -409,17 +410,16 @@ void menuLoop() {
     }
     else
     {
-        static int x = 0;
         static int v = 0;
 
         if (menu->nEntries > 7) {
             int wanted_x = clamp(-menu->curEntry * (140 + 30), -(menu->nEntries - 7) * (140 + 30), 0);
-            x += v;
-            v += (wanted_x - x) / 3;
+            menu->xPos += v;
+            v += (wanted_x - menu->xPos) / 3;
             v /= 2;
         }
         else {
-            x = v = 0;
+            menu->xPos = v = 0;
         }
 
         menuEntry_s *active_entry = NULL;
@@ -429,7 +429,7 @@ void menuLoop() {
             int entry_start_x = 29 + i * (140 + 30);
 
             int screen_width = 1280;
-            if (entry_start_x >= (screen_width - x))
+            if (entry_start_x >= (screen_width - menu->xPos))
                 break;
 
             int is_active = i==menu->curEntry;
@@ -437,16 +437,18 @@ void menuLoop() {
             if (is_active)
                 active_entry = me;
 
-            drawEntry(me, entry_start_x + x, is_active);
+            drawEntry(me, entry_start_x + menu->xPos, is_active);
         }
 
         if(active_entry != NULL) {
             if (active_entry->type != ENTRY_TYPE_FOLDER) {
-                drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
+                //drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
+                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);//Display the 'A' button from SharedFont.
                 DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Launch));
             }
             else {
-                drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
+                //drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
+                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);
                 DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Open));
             }
         }
