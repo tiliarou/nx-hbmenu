@@ -15,9 +15,10 @@ int main()
     sf::RenderWindow window(sf::VideoMode(1280, 720), "Test");
     window.setFramerateLimit(60);
 
+    menuStartupPath();
     themeStartup(THEME_PRESET_LIGHT);
     textInit();
-    fontInitialize();//Must be called before menuStartup() due to cwd.
+    fontInitialize();
     menuStartup();
 
     while (window.isOpen())
@@ -66,6 +67,8 @@ extern "C" bool menuUpdate(void) {
     int new_return_state = sf::Keyboard::isKeyPressed(sf::Keyboard::Return);
     static int y_state = 0;
     int new_y_state = sf::Keyboard::isKeyPressed(sf::Keyboard::Y);
+    static int t_state = 0;
+    int new_t_state = sf::Keyboard::isKeyPressed(sf::Keyboard::T);
 
     if(!new_y_state && y_state)
     {
@@ -77,19 +80,12 @@ extern "C" bool menuUpdate(void) {
     {
         launchMenuBackTask();
     }
+    else if(!new_t_state && t_state){
+        themeMenuStartup();
+    }
     else if (!new_return_state && return_state)
     {
-        if (menuIsMsgBoxOpen()) {
-            menuCloseMsgBox();
-        }
-        else if (menu->nEntries > 0)
-        {
-            int i;
-            menuEntry_s* me;
-            for (i = 0, me = menu->firstEntry; i != menu->curEntry; i ++, me = me->next);
-            launchMenuEntryTask(me);
-            //workerSchedule(launchMenuEntryTask, me);
-        }
+        menuHandleAButton();
     }
     else if (menu->nEntries > 0)
     {
@@ -116,6 +112,7 @@ extern "C" bool menuUpdate(void) {
     esc_state = new_esc_state;
     return_state = new_return_state;
     y_state = new_y_state;
+    t_state = new_t_state;
 
     return 0;
 }

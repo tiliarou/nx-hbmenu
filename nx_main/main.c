@@ -41,8 +41,11 @@ int main(int argc, char **argv)
     rc = plInitialize();
     if (R_FAILED(rc)) fatalSimple(-6);
 
+    menuStartupPath();
+
     themeStartup((ThemePreset)theme);
     textInit();
+    powerInit();
     menuStartup();
 
     launchInit();
@@ -99,6 +102,7 @@ int main(int argc, char **argv)
 
     fontExit();
     launchExit();
+    powerExit();
     plExit();
     setsysExit();
 
@@ -119,30 +123,19 @@ bool menuUpdate(void) {
     }
     else if (down & KEY_A)
     {
-        if (menuIsMsgBoxOpen()) {
-            menuCloseMsgBox();
-        }
-        else if (menu->nEntries > 0)
-        {
-            int i;
-            menuEntry_s* me;
-            for (i = 0, me = menu->firstEntry; i != menu->curEntry; i ++, me = me->next);
-            launchMenuEntryTask(me);
-            //workerSchedule(launchMenuEntryTask, me);
-        }
+        menuHandleAButton();
     }
     else if (down & KEY_B)
     {
         launchMenuBackTask();
     }
+    else if(down & KEY_MINUS){
+        themeMenuStartup();
+    }
     else if (down & KEY_PLUS)
     {
         exitflag = 1;
     }
-    /*else if (down & KEY_Y)
-    {
-        workerSchedule(netloaderTask, NULL);
-    }*/
     else if (menu->nEntries > 0)
     {
         int move = 0;

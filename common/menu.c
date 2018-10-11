@@ -4,19 +4,30 @@
 
 #include "invalid_icon_bin.h"
 #include "folder_icon_bin.h"
+#include "theme_icon_dark_bin.h"
+#include "theme_icon_light_bin.h"
+#include "charging_icon_bin.h"
+#include "battery_icon_bin.h"
 
+char rootPathBase[PATH_MAX];
 char rootPath[PATH_MAX+8];
+void computeFrontGradient(color_t baseColor, int height);
 
-char *menuGetRootPath() {
+char *menuGetRootPath(void) {
     return rootPath;
 }
 
-void launchMenuEntryTask(menuEntry_s* arg)
-{
+char *menuGetRootBasePath(void) {
+    return rootPathBase;
+}
+
+void launchMenuEntryTask(menuEntry_s* arg) {
     menuEntry_s* me = arg;
     if (me->type == ENTRY_TYPE_FOLDER)
         menuScan(me->path);
         //changeDirTask(me->path);
+    else if(me->type == ENTRY_TYPE_THEME)
+        launchApplyThemeTask(me);
     else
         launchMenuEntry(me);
 }
@@ -27,6 +38,7 @@ static enum
     HBMENU_NETLOADER_ACTIVE,
     HBMENU_NETLOADER_ERROR,
     HBMENU_NETLOADER_SUCCESS,
+    HBMENU_THEME_MENU,
 } hbmenu_state = HBMENU_DEFAULT;
 
 void launchMenuNetloaderTask() {
@@ -34,15 +46,42 @@ void launchMenuNetloaderTask() {
         if(netloader_activate() == 0) hbmenu_state = HBMENU_NETLOADER_ACTIVE;
 }
 
-void launchMenuBackTask()
-{
+void launchMenuBackTask() {
     if(hbmenu_state == HBMENU_NETLOADER_ACTIVE) {
         netloader_deactivate();
         hbmenu_state = HBMENU_DEFAULT;
-    } else {
+    }
+    else if(hbmenu_state == HBMENU_THEME_MENU) {
+        hbmenu_state = HBMENU_DEFAULT;
+        menuScan(rootPath);
+    }
+    else {
         menuScan("..");
     }
 
+}
+
+void menuHandleAButton(void) {
+    menu_s* menu = menuGetCurrent();
+
+    if (menuIsMsgBoxOpen()) {
+        menuCloseMsgBox();
+    }
+    else if (menu->nEntries > 0 && (hbmenu_state == HBMENU_DEFAULT || hbmenu_state == HBMENU_THEME_MENU))
+    {
+        int i;
+        menuEntry_s* me;
+        for (i = 0, me = menu->firstEntry; i != menu->curEntry; i ++, me = me->next);
+        launchMenuEntryTask(me);
+        //workerSchedule(launchMenuEntryTask, me);
+    }
+}
+
+void launchApplyThemeTask(menuEntry_s* arg) {
+    const char* themePath = arg->path;
+    SetThemePathToConfig(themePath);
+    themeStartup(themeGlobalPreset);
+    computeFrontGradient(themeCurrent.frontWaveColor, 280); 
 }
 
 //Draws an RGB888 or RGBA8888 image.
@@ -70,8 +109,24 @@ static void drawImage(int x, int y, int width, int height, const uint8_t *image,
     }
 }
 
+//Draws an RGBA8888 image masked by the passed color.
+static void drawIcon(int x, int y, int width, int height, const uint8_t *image, color_t color) {
+    int tmpx, tmpy;
+    int pos;
+    color_t current_color;
+
+    for (tmpy=0; tmpy<height; tmpy++) {
+        for (tmpx=0; tmpx<width; tmpx++) {
+            pos = ((tmpy*width) + tmpx) * 4;
+            current_color = MakeColor(color.r, color.g, color.b, image[pos+3]);
+            DrawPixel(x+tmpx, y+tmpy, current_color);
+        }
+    }
+}
+
 uint8_t *folder_icon_small;
 uint8_t *invalid_icon_small;
+uint8_t *theme_icon_small;
 
 static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
     int x, y;
@@ -87,7 +142,7 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
 
     int border_start_x, border_end_x;
     int border_start_y, border_end_y;
-    color_t border_color = MakeColor(255, 255, 255, 255);
+    color_t border_color = themeCurrent.borderColor;
 
     int shadow_start_y, shadow_y;
     int shadow_inset;
@@ -166,7 +221,7 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
 
     for (y=start_y; y<end_y; y++) {
         for (x=start_x; x<end_x; x+=4) {
-            Draw4PixelsRaw(x, y, MakeColor(255, 255, 255, 255));
+            Draw4PixelsRaw(x, y, themeCurrent.borderColor);
         }
     }
 
@@ -177,6 +232,12 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
     else if (me->type == ENTRY_TYPE_FOLDER) {
         smallimg = folder_icon_small;
         largeimg = folder_icon_bin;
+    }
+    else if (me->type == ENTRY_TYPE_THEME){
+        smallimg = theme_icon_small;
+        if(themeGlobalPreset == THEME_PRESET_DARK)
+            largeimg = theme_icon_dark_bin;
+        else largeimg = theme_icon_light_bin;
     }
     else {
         smallimg = invalid_icon_small;
@@ -206,7 +267,7 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
         }
     }
 
-    DrawTextTruncate(interuiregular14, start_x + 4, start_y + 4 + 18, MakeColor(64, 64, 64, 255), me->name, 140 - 32, "...");
+    DrawTextTruncate(interuiregular14, start_x + 4, start_y + 4 + 18, themeCurrent.borderTextColor, me->name, 140 - 32, "...");
 
     if (is_active) {
         start_x = 1280 - 790;
@@ -247,15 +308,15 @@ void computeFrontGradient(color_t baseColor, int height) {
     }
 }
 
-void menuStartup() {
-    char tmp_path[PATH_MAX];
+void menuStartupPath(void) {
+    char tmp_path[PATH_MAX+28];
 
     #ifdef __SWITCH__
-    strcpy(tmp_path,"sdmc:");
+    strncpy(rootPathBase, "sdmc:", sizeof(rootPathBase)-1);
     #else
-    getcwd(tmp_path, PATH_MAX);
+    getcwd(rootPathBase, sizeof(rootPathBase));
     #endif
-    snprintf(rootPath, sizeof(rootPath)-1, "%s%s%s", tmp_path, DIRECTORY_SEPARATOR, "switch");
+    snprintf(rootPath, sizeof(rootPath)-1, "%s%s%s", rootPathBase, DIRECTORY_SEPARATOR, "switch");
 
     struct stat st = {0};
 
@@ -263,16 +324,54 @@ void menuStartup() {
         mkdir(rootPath, 0755);
     }
 
+    snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu/themes", rootPathBase);
+    if (stat(tmp_path, &st) == -1) {
+        snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config", rootPathBase);
+        mkdir(tmp_path, 0755);
+
+        snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu", rootPathBase);
+        mkdir(tmp_path, 0755);
+
+        snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu/themes", rootPathBase);
+        mkdir(tmp_path, 0755);
+    }
+
+    snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu/fileassoc", rootPathBase);
+    if (stat(tmp_path, &st) == -1) {
+        mkdir(tmp_path, 0755);
+    }
+}
+
+void menuStartup(void) {
+    char tmp_path[PATH_MAX+28];
+
+    snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu/fileassoc", rootPathBase);
+    menuFileassocScan(tmp_path);
+
     menuScan(rootPath);
 
     folder_icon_small = downscaleImg(folder_icon_bin, 256, 256, 140, 140, IMAGE_MODE_RGB24);
     invalid_icon_small = downscaleImg(invalid_icon_bin, 256, 256, 140, 140, IMAGE_MODE_RGB24);
+    if(themeGlobalPreset == THEME_PRESET_DARK)
+        theme_icon_small = downscaleImg(theme_icon_dark_bin, 256, 256, 140, 140, IMAGE_MODE_RGB24);
+    else
+        theme_icon_small = downscaleImg(theme_icon_light_bin, 256, 256, 140, 140, IMAGE_MODE_RGB24);
     computeFrontGradient(themeCurrent.frontWaveColor, 280);
     //menuCreateMsgBox(780, 300, "This is a test");
 }
 
+void themeMenuStartup(void) {
+    if(hbmenu_state != HBMENU_DEFAULT) return;
+    hbmenu_state = HBMENU_THEME_MENU;
+    char tmp_path[PATH_MAX+25];
+
+    snprintf(tmp_path, sizeof(tmp_path)-1, "%s%s%s%s%s%s%s", rootPathBase, DIRECTORY_SEPARATOR, "config", DIRECTORY_SEPARATOR, "nx-hbmenu" , DIRECTORY_SEPARATOR, "themes");
+
+    themeMenuScan(tmp_path);
+}
+
 color_t waveBlendAdd(color_t a, color_t b, float alpha) {
-    return MakeColor(a.r+(b.r*alpha), a.g+b.g*alpha, a.b + b.b*alpha, 255);
+    return MakeColor(a.r*(1.0f-alpha) + b.r*alpha, a.g*(1.0f-alpha) + b.g*alpha, a.b*(1.0f-alpha) + b.b*alpha, 255);
 }
 
 void drawWave(int id, float timer, color_t color, int height, float phase, float speed) {
@@ -320,7 +419,7 @@ void drawTime() {
     char timeString[9];
 
     time_t unixTime = time(NULL);
-    struct tm* timeStruct = gmtime((const time_t *)&unixTime);
+    struct tm* timeStruct = localtime((const time_t *)&unixTime);
 
     int hours = timeStruct->tm_hour;
     int minutes = timeStruct->tm_min;
@@ -328,8 +427,33 @@ void drawTime() {
 
     sprintf(timeString, "%02d:%02d:%02d", hours, minutes, seconds);
 
-    DrawText(interuimedium20, 1280 - (9 * 16) - 30, 30 + 26, MakeColor(255, 255, 255, 255), timeString);
+    int tmpX = GetTextXCoordinate(interuimedium20, 1180, timeString, 'r');
 
+    DrawText(interuimedium20, tmpX, 0 + 47 + 10, themeCurrent.textColor, timeString);
+
+}
+
+void drawCharge() {
+    char chargeString[5];
+    uint32_t batteryCharge;
+    bool isCharging;
+    bool validPower;
+
+    validPower = powerGetDetails(&batteryCharge, &isCharging);
+    
+    if (validPower)
+    {
+        batteryCharge = (batteryCharge > 100) ? 100 : batteryCharge;
+
+        sprintf(chargeString, "%d%%", batteryCharge);
+        
+        int tmpX = GetTextXCoordinate(interuiregular14, 1180, chargeString, 'r');
+
+        DrawText(interuiregular14, tmpX - 15, 0 + 47 + 10 + 21, themeCurrent.textColor, chargeString);
+        drawIcon(1180 - 11, 0 + 47 + 10 + 6, 10, 15, battery_icon_bin, themeCurrent.textColor);
+        if (isCharging)
+            drawIcon(tmpX - 32, 0 + 47 + 10 + 6, 9, 15, charging_icon_bin, themeCurrent.textColor);
+    }
 }
 
 void drawBackBtn(menu_s* menu, bool emptyDir) {
@@ -353,7 +477,7 @@ void drawBackBtn(menu_s* menu, bool emptyDir) {
     }
 }
 
-void menuLoop() {
+void menuLoop(void) {
     menuEntry_s* me;
     menu_s* menu = menuGetCurrent();
     int i;
@@ -387,7 +511,8 @@ void menuLoop() {
     DrawText(interuiregular14, 180 + 256, 46 + 16 + 18, themeCurrent.textColor, tmpstr);
     #endif
 
-    //drawTime();
+    drawTime();
+    drawCharge();
 
     if (menu->nEntries==0 || hbmenu_state == HBMENU_NETLOADER_ACTIVE)
     {
@@ -440,14 +565,25 @@ void menuLoop() {
             drawEntry(me, entry_start_x + menu->xPos, is_active);
         }
 
+        int getX = GetTextXCoordinate(interuiregular18, 1180, textGetString(StrId_ThemeMenu), 'r');
+
+        if(hbmenu_state == HBMENU_THEME_MENU) {
+            DrawText(interuiregular18, getX, 30 + 26 + 32 + 10, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
+        } else {
+            //DrawText(interuiregular18, getX, 30 + 26 + 32 + 10, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
+            //DrawText(fontscale7, getX - 40,  30 + 26 + 32 + 10, themeCurrent.textColor, themeCurrent.buttonMText);
+        }
+        
         if(active_entry != NULL) {
-            if (active_entry->type != ENTRY_TYPE_FOLDER) {
-                //drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
+            if (active_entry->type == ENTRY_TYPE_THEME) {
+                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);
+                DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Apply));
+            }
+            else if (active_entry->type != ENTRY_TYPE_FOLDER) {
                 DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);//Display the 'A' button from SharedFont.
                 DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Launch));
             }
             else {
-                //drawImage(1280 - 126 - 30 - 32, 720 - 48, 32, 32, themeCurrent.buttonAImage, IMAGE_MODE_RGBA32);
                 DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);
                 DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Open));
             }
