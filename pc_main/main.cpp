@@ -19,6 +19,8 @@ int main()
     themeStartup(THEME_PRESET_LIGHT);
     textInit();
     fontInitialize();
+    netloaderInit();
+    workerInit();
     menuStartup();
 
     while (window.isOpen())
@@ -52,6 +54,9 @@ int main()
         window.display();
     }
 
+    netloaderSignalExit();
+    workerExit();
+    netloaderExit();
     fontExit();
 
     return 0;

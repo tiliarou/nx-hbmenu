@@ -221,6 +221,11 @@ const char* const g_strings[StrId_Max][16] =
         STR_TW("程式執行時發生錯誤:"),
     },
 
+    [StrId_AppLaunchError] =
+    {
+        STR_EN("Failed to launch the application:"),
+    },
+
     [StrId_AppInfo_Author] =
     {
         STR_EN("Author"),
@@ -304,6 +309,7 @@ const char* const g_strings[StrId_Max][16] =
     [StrId_MsgBox_OK] =
     {
         STR_EN("OK"),
+        STR_FR("OK"),
         STR_ES("Aceptar"),
         STR_JP("了解"),
         STR_KO("확인"),
@@ -313,6 +319,7 @@ const char* const g_strings[StrId_Max][16] =
     [StrId_Actions_Apply] =
     {
         STR_EN("Apply"),
+        STR_FR("Appliquer"),
         STR_ES("Aplicar"),
         STR_JP("適用"),
         STR_KO("적용"),
@@ -322,6 +329,7 @@ const char* const g_strings[StrId_Max][16] =
     [StrId_ThemeMenu] =
     {
         STR_EN("Theme Menu"),
+        STR_FR("Menu Thème"),
         STR_ES("Menú temático"),
         STR_JP("テーマメニュー"),
         STR_KO("테마 메뉴"),
@@ -331,6 +339,7 @@ const char* const g_strings[StrId_Max][16] =
     [StrId_ThemeNotApplied] =
     {
         STR_EN("Theme cannot be applied because an error occurred."),
+        STR_FR("Le thème ne peut pas être appliqué car une erreur est survenue."),
         STR_ES("El tema no se pudo aplicar porque se ha producido un error."),
         STR_JP("エラーが発生したため、テーマを適用できませんでした。"),
         STR_KO("오류가 발생 했기 때문에 테마를 적용할 수 없습니다."),
@@ -340,6 +349,7 @@ const char* const g_strings[StrId_Max][16] =
     [StrId_DefaultThemeName] =
     {
         STR_EN("Default Theme"),
+        STR_FR("Thème par défaut"),
     },
 
     /*[StrId_Reboot] =
@@ -726,23 +736,23 @@ const char* const g_strings[StrId_Max][16] =
         ),
     },*/
 
-    /*[StrId_NetLoader] =
+    [StrId_NetLoader] =
     {
-        STR_EN("3dslink NetLoader"),
-        STR_ES("Cargador de programas 3dslink"),
-        STR_DE("3dslink Netzwerk-Loader"),
-        STR_FR("Chargeur de programme 3dslink"),
-        STR_IT("Caricamento programmi 3dslink"),
-        STR_JP("3dslinkネットローダ"),
-        STR_PT("Carregador de programas 3dslink"),
-        STR_NL("3dslink netwerk lader"),
-        STR_KO("3dslink 네트워크 로더"),
-        STR_RU("Загрузчик 3dslink"),
-        STR_ZH("3dslink 网络执行模块"),
-        STR_TW("3dslink 網路執行模組"),
+        STR_EN("NetLoader"),
+        STR_ES("Cargador de programas"),
+        STR_DE("Netzwerk-Loader"),
+        STR_FR("Chargeur de programme"),
+        STR_IT("Caricamento programmi"),
+        STR_JP("ネットローダ"),
+        STR_PT("Carregador de programas"),
+        STR_NL("netwerk lader"),
+        STR_KO("네트워크 로더"),
+        STR_RU("Загрузчик"),
+        STR_ZH("网络执行模块"),
+        STR_TW("網路執行模組"),
     },
 
-    [StrId_NetLoaderUnavailable] =
+    /*[StrId_NetLoaderUnavailable] =
     {
         STR_EN("The NetLoader is currently unavailable."),
         STR_ES("El cargador de programas no está disponible."),
