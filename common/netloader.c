@@ -45,19 +45,26 @@ static unsigned char out[ZLIB_CHUNK];
 
 static mtx_t netloader_mtx;
 
-static bool netloader_initialized = 0;
-static bool netloader_exitflag = 0;
-static bool netloader_activated = 0, netloader_launchapp = 0;
 static menuEntry_s netloader_me;
-static char netloader_errortext[1024];
+static volatile bool netloader_initialized = 0;
+static volatile bool netloader_exitflag = 0;
+static volatile bool netloader_activated = 0, netloader_launchapp = 0;
+static volatile size_t netloader_filelen, netloader_filetotal;
+static volatile char netloader_errortext[1024];
 
 static bool netloaderGetExit(void);
 
 //---------------------------------------------------------------------------------
 static void netloader_error(const char *func, int err) {
 //---------------------------------------------------------------------------------
-    memset(netloader_errortext, 0, sizeof(netloader_errortext));
-    snprintf(netloader_errortext, sizeof(netloader_errortext)-1, "%s: err=%d\n %s\n", func, err, strerror(errno));
+    if (!netloader_initialized || netloaderGetExit()) return;
+
+    mtx_lock(&netloader_mtx);
+    if (netloader_errortext[0] == 0) {
+        memset((char*)netloader_errortext, 0, sizeof(netloader_errortext));
+        snprintf((char*)netloader_errortext, sizeof(netloader_errortext)-1, "%s: err=%d\n %s\n", func, err, strerror(errno));
+    }
+    mtx_unlock(&netloader_mtx);
 }
 
 //---------------------------------------------------------------------------------
@@ -177,6 +184,7 @@ static int set_socket_nonblocking(int sock) {
 static int recvall(int sock, void *buffer, int size, int flags) {
 //---------------------------------------------------------------------------------
     int len, sizeleft = size;
+    bool blockflag=0;
 
     while (sizeleft) {
 
@@ -197,17 +205,68 @@ static int recvall(int sock, void *buffer, int size, int flags) {
                 netloader_error("win socket error",errcode);
                 break;
             }
+            else {
+                blockflag = 1;
+            }
 #else
             if ( errno != EWOULDBLOCK && errno != EAGAIN) {
-                perror(NULL);
+                netloader_socket_error("recv");
                 break;
             }
+            else {
+                blockflag = 1;
+            }
 #endif
+
+            if (blockflag && netloaderGetExit()) return 0;
         }
     }
     return size;
 }
 
+//---------------------------------------------------------------------------------
+static int sendall(int sock, void *buffer, int size, int flags) {
+//---------------------------------------------------------------------------------
+    int len, sizeleft = size;
+    bool blockflag=0;
+
+    while (sizeleft) {
+
+        len = send(sock,buffer,sizeleft,flags);
+
+        if (len == 0) {
+            size = 0;
+            break;
+        };
+
+        if (len != -1) {
+            sizeleft -=len;
+            buffer +=len;
+        } else {
+#ifdef _WIN32
+            int errcode = WSAGetLastError();
+            if (errcode != WSAEWOULDBLOCK) {
+                netloader_error("win socket error",errcode);
+                break;
+            }
+            else {
+                blockflag = 1;
+            }
+#else
+            if ( errno != EWOULDBLOCK && errno != EAGAIN) {
+                netloader_socket_error("recv");
+                break;
+            }
+            else {
+                blockflag = 1;
+            }
+#endif
+
+            if (blockflag && netloaderGetExit()) return 0;
+        }
+    }
+    return size;
+}
 
 //---------------------------------------------------------------------------------
 static int decompress(int sock, FILE *fh, size_t filesize) {
@@ -283,6 +342,9 @@ static int decompress(int sock, FILE *fh, size_t filesize) {
         }
 
         total += have;
+        mtx_lock(&netloader_mtx);
+        netloader_filetotal = total;
+        mtx_unlock(&netloader_mtx);
         //printf("%zu (%zd%%)",total, (100 * total) / filesize);
     } while (strm.avail_out == 0);
 
@@ -328,6 +390,10 @@ int loadnro(menuEntry_s *me, int sock, struct in_addr remote) {
         netloader_error("Error getting file length",errno);
         return -1;
     }
+
+    mtx_lock(&netloader_mtx);
+    netloader_filelen = filelen;
+    mtx_unlock(&netloader_mtx);
 
     int response = 0;
 
@@ -379,17 +445,42 @@ int loadnro(menuEntry_s *me, int sock, struct in_addr remote) {
 
         if (decompress(sock,file,filelen)==Z_OK) {
             int netloaded_cmdlen = 0;
-            send(sock,(char *)&response,sizeof(response),0);
+            len = sendall(sock,(char *)&response,sizeof(response),0);
+
+            if (len != sizeof(response)) {
+                netloader_error("Error sending response",errno);
+                response = -1;
+            }
+
             //printf("\ntransferring command line\n");
-            len = recvall(sock,(char*)&netloaded_cmdlen,4,0);
 
-            len = recvall(sock,me->args.dst, netloaded_cmdlen,0);
+            if (response == 0 ) {
+                len = recvall(sock,(char*)&netloaded_cmdlen,4,0);
 
-            while(netloaded_cmdlen) {
-                size_t len = strlen(me->args.dst) + 1;
-                ad->dst += len;
-                ad->buf[0]++;
-                netloaded_cmdlen -= len;
+                if (len != 4) {
+                    netloader_error("Error getting netloaded_cmdlen",errno);
+                    response = -1;
+                }
+            }
+
+            if (response == 0 ) {
+                if (netloaded_cmdlen > sizeof(me->args.buf)-1) netloaded_cmdlen = sizeof(me->args.buf)-1;
+
+                len = recvall(sock,me->args.dst, netloaded_cmdlen,0);
+
+                if (len != netloaded_cmdlen) {
+                    netloader_error("Error getting args",errno);
+                    response = -1;
+                }
+            }
+
+            if (response == 0 ) {
+                while(netloaded_cmdlen) {
+                    size_t len = strlen(me->args.dst) + 1;
+                    ad->dst += len;
+                    ad->buf[0]++;
+                    netloaded_cmdlen -= len;
+                }
             }
 
         } else {
@@ -410,19 +501,6 @@ int loadnro(menuEntry_s *me, int sock, struct in_addr remote) {
 int netloader_activate(void) {
 //---------------------------------------------------------------------------------
     struct sockaddr_in serv_addr;
-
-#ifdef __SWITCH__
-    socketInitializeDefault();
-#endif
-
-#ifdef __WIN32__
-    WSADATA wsa_data;
-    if (WSAStartup (MAKEWORD(2,2), &wsa_data)) {
-        netloader_error("WSAStartup failed\n",1);
-        return 1;
-    }
-#endif
-
 
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -506,40 +584,30 @@ int netloader_deactivate(void) {
     }
 #endif
 
-#ifdef __SWITCH__
-    socketExit();
-#endif
-
-#ifdef __WIN32__
-    WSACleanup ();
-#endif
-
     return 0;
 }
 
 //---------------------------------------------------------------------------------
-int netloader_loop(menuEntry_s *me) {
+int netloader_loop(struct sockaddr_in *sa_remote) {
 //---------------------------------------------------------------------------------
-
-    struct sockaddr_in sa_remote;
 
 #if PING_ENABLED
     char recvbuf[256];
-    socklen_t fromlen = sizeof(sa_remote);
+    socklen_t fromlen = sizeof(struct sockaddr_in);
 
-    int len = recvfrom(netloader_udpfd, recvbuf, sizeof(recvbuf), 0, (struct sockaddr*) &sa_remote, &fromlen);
+    int len = recvfrom(netloader_udpfd, recvbuf, sizeof(recvbuf), 0, (struct sockaddr*) sa_remote, &fromlen);
 
     if (len!=-1) {
         if (strncmp(recvbuf,"nxboot",strlen("nxboot")) == 0) {
-            sa_remote.sin_family=AF_INET;
-            sa_remote.sin_port=htons(NXLINK_CLIENT_PORT);
-            sendto(netloader_udpfd, "bootnx", strlen("bootnx"), 0, (struct sockaddr*) &sa_remote,sizeof(sa_remote));
+            sa_remote->sin_family=AF_INET;
+            sa_remote->sin_port=htons(NXLINK_CLIENT_PORT);
+            sendto(netloader_udpfd, "bootnx", strlen("bootnx"), 0, (struct sockaddr*) sa_remote,sizeof(struct sockaddr_in));
         }
     }
 #endif
     if(netloader_listenfd >= 0 && netloader_datafd < 0) {
-        socklen_t addrlen = sizeof(sa_remote);
-        netloader_datafd = accept(netloader_listenfd, (struct sockaddr*)&sa_remote, &addrlen);
+        socklen_t addrlen = sizeof(struct sockaddr_in);
+        netloader_datafd = accept(netloader_listenfd, (struct sockaddr*)sa_remote, &addrlen);
         if(netloader_datafd < 0)
         {
 
@@ -559,35 +627,38 @@ int netloader_loop(menuEntry_s *me) {
         }
         else
         {
+            if (set_socket_nonblocking(netloader_datafd) == -1)
+            {
+                netloader_socket_error("set_socket_nonblocking(netloader_datafd)");
+                return -1;
+            }
+
             close(netloader_listenfd);
             netloader_listenfd = -1;
-        }
-    }
-
-    if(netloader_datafd >= 0)
-    {
-        int result = loadnro(me, netloader_datafd,sa_remote.sin_addr);
-        if (result== 0) {
             return 1;
-        } else {
-            return -1;
         }
     }
 
     return 0;
 }
 
-void netloaderGetState(bool *activated, bool *launch_app, menuEntry_s **me, char *errormsg, size_t errormsg_size) {
+void netloaderGetState(netloaderState *state) {
+    if(state==NULL)return;
     mtx_lock(&netloader_mtx);
 
-    *activated = netloader_activated;
-    *launch_app = netloader_launchapp;
-    *me = &netloader_me;
+    state->activated = netloader_activated;
+    state->launch_app = netloader_launchapp;
+    state->me = &netloader_me;
 
-    memset(errormsg, 0, errormsg_size);
+    state->transferring = (netloader_datafd >= 0 && netloader_filelen);
+    state->sock_connected = netloader_datafd >= 0;
+    state->filelen = netloader_filelen;
+    state->filetotal = netloader_filetotal;
+
+    memset(state->errormsg, 0, sizeof(state->errormsg));
     if(netloader_errortext[0]) {
-        strncpy(errormsg, netloader_errortext, errormsg_size-1);
-        memset(netloader_errortext, 0, sizeof(netloader_errortext));
+        strncpy(state->errormsg, (char*)netloader_errortext, sizeof(state->errormsg)-1);
+        memset((char*)netloader_errortext, 0, sizeof(netloader_errortext));
     }
 
     mtx_unlock(&netloader_mtx);
@@ -609,13 +680,31 @@ void netloaderSignalExit(void) {
     mtx_unlock(&netloader_mtx);
 }
 
-bool netloaderInit(void) {
-    if (netloader_initialized) return 1;
+Result netloaderInit(void) {
+    Result rc=0;
+    if (netloader_initialized) return 0;
 
-    if (mtx_init(&netloader_mtx, mtx_plain) != thrd_success) return 0;
+    if (mtx_init(&netloader_mtx, mtx_plain) != thrd_success) return 1;
+
+#ifdef __SWITCH__
+    rc = socketInitializeDefault();
+#endif
+
+#ifdef __WIN32__
+    WSADATA wsa_data;
+    if (WSAStartup (MAKEWORD(2,2), &wsa_data)) {
+        //netloader_error("WSAStartup failed\n",1);
+        rc = 2;
+    }
+#endif
+
+    if (rc) {
+        mtx_destroy(&netloader_mtx);
+        return rc;
+    }
 
     netloader_initialized = 1;
-    return 1;
+    return 0;
 }
 
 void netloaderExit(void) {
@@ -623,16 +712,28 @@ void netloaderExit(void) {
     netloader_initialized = 0;
 
     mtx_destroy(&netloader_mtx);
+
+#ifdef __SWITCH__
+    socketExit();
+#endif
+
+#ifdef __WIN32__
+    WSACleanup ();
+#endif
 }
 
 void netloaderTask(void* arg) {
     int ret=0;
+    struct sockaddr_in sa_remote;
+    struct timespec duration = {.tv_nsec = 100000000};
     menuEntryInit(&netloader_me,ENTRY_TYPE_FILE);
 
     mtx_lock(&netloader_mtx);
     netloader_exitflag = 0;
     netloader_activated = 0;
     netloader_launchapp = 0;
+    netloader_filelen = 0;
+    netloader_filetotal = 0;
     mtx_unlock(&netloader_mtx);
 
     if(netloader_activate() == 0) {
@@ -645,13 +746,24 @@ void netloaderTask(void* arg) {
         return;
     }
 
-    while((ret = netloader_loop(&netloader_me)) == 0 && !netloaderGetExit());
+    while((ret = netloader_loop(&sa_remote)) == 0 && !netloaderGetExit()) {
+        thrd_sleep(&duration, NULL);
+    }
+
+    if(ret == 1 && !netloaderGetExit()) {
+        int result = loadnro(&netloader_me, netloader_datafd,sa_remote.sin_addr);
+        if (result== 0) {
+            ret = 1;
+        } else {
+            ret = -1;
+        }
+    }
 
     netloader_deactivate();
     mtx_lock(&netloader_mtx);
+    if (ret==1 && !netloader_exitflag) netloader_launchapp = 1;//Access netloader_exitflag directly since the mutex is already locked.
     netloader_exitflag = 0;
     netloader_activated = 0;
-    if (ret==1 && !netloader_exitflag) netloader_launchapp = 1;//Access netloader_exitflag directly since the mutex is already locked.
     mtx_unlock(&netloader_mtx);
 }
 

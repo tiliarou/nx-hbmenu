@@ -3,6 +3,8 @@
 #define TAP_MOVEMENT_GAP 20
 #define VERTICAL_SWIPE_HORIZONTAL_PLAY 250
 #define VERTICAL_SWIPE_MINIMUM_DISTANCE 300
+#define HORIZONTAL_SWIPE_VERTICAL_PLAY 250
+#define HORIZONTAL_SWIPE_MINIMUM_DISTANCE 300
 #define LISTING_START_Y 475
 #define LISTING_END_Y 647
 #define BUTTON_START_Y 672
@@ -93,7 +95,9 @@ void handleTouch(menu_s* menu) {
         int x2 = touchInfo.prevTouch.px;
         int y2 = touchInfo.prevTouch.py;
 
-        if (menuIsMsgBoxOpen()) {
+        bool netloader_active = menuIsNetloaderActive();
+
+        if (menuIsMsgBoxOpen() && !netloader_active) {
             MessageBox currMsgBox = menuGetCurrentMsgBox();
             int start_x = 1280 / 2 - currMsgBox.width / 2;
             int start_y = (720 / 2 - currMsgBox.height / 2) + (currMsgBox.height - 80);
@@ -103,7 +107,7 @@ void handleTouch(menu_s* menu) {
             if (x1 > start_x && x1 < end_x && y1 > start_y && y1 < end_y && touchInfo.isTap) {
                 menuCloseMsgBox();
             }
-        } else if (touchInfo.isTap) {
+        } else if (touchInfo.isTap && !netloader_active) {
             // App Icons
             if (y1 > LISTING_START_Y && y1 < LISTING_END_Y) {
                 handleTappingOnApp(menu, touchInfo.prevTouch.px);
@@ -133,6 +137,13 @@ void handleTouch(menu_s* menu) {
             // Swipe down to go into netloader
             else if (y1 - y2 < 0) {
                 launchMenuNetloaderTask();
+            }
+        }
+        // Horizontal Swipe
+        else if (abs(y1 - y2) < HORIZONTAL_SWIPE_VERTICAL_PLAY && distance(x1, y1, x2, y2) > HORIZONTAL_SWIPE_MINIMUM_DISTANCE) {
+            // Swipe left to go into theme-menu
+            if (x1 - x2 > 0) {
+                themeMenuStartup();
             }
         }
 

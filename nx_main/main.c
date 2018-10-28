@@ -36,6 +36,7 @@ int main(int argc, char **argv)
 
     memset(errormsg, 0, sizeof(errormsg));
 
+    appletLockExit();
     appletSetScreenShotPermission(1);
 
     ColorSetId theme;
@@ -64,13 +65,15 @@ int main(int argc, char **argv)
 
     if (R_SUCCEEDED(rc)) powerInit();
 
-    if (R_SUCCEEDED(rc) && !netloaderInit()) {
-        rc = 1;
-        snprintf(errormsg, sizeof(errormsg)-1, "Error: netloaderInit() failed.");
+    if (R_SUCCEEDED(rc)) {
+        rc = netloaderInit();
+        if (R_FAILED(rc)) {
+            snprintf(errormsg, sizeof(errormsg)-1, "Error: netloaderInit() failed: 0x%x.", rc);
+        }
     }
 
     if (R_SUCCEEDED(rc) && !workerInit()) {
-        rc = 2;
+        rc = 1;
         snprintf(errormsg, sizeof(errormsg)-1, "Error: workerInit() failed.");
     }
 
@@ -78,13 +81,13 @@ int main(int argc, char **argv)
 
     if (R_SUCCEEDED(rc)) {
         if (!launchInit()) {
-            rc = 3;
+            rc = 2;
             snprintf(errormsg, sizeof(errormsg)-1, "Error: launchInit() failed.");
         }
     }
 
     if (R_SUCCEEDED(rc) && !fontInitialize()) {
-        rc = 4;
+        rc = 3;
         snprintf(errormsg, sizeof(errormsg)-1, "Error: fontInitialize() failed.");
     }
 
@@ -177,6 +180,8 @@ int main(int argc, char **argv)
     powerExit();
     plExit();
     setsysExit();
+
+    appletUnlockExit();
 
     return 0;
 }
