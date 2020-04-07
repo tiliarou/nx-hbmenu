@@ -23,6 +23,8 @@
 typedef uint8_t u8;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef int8_t s8;
+typedef int32_t s32;
 typedef u32 Result;
 
 typedef void (*workerThreadFunc)(void *);
@@ -45,6 +47,49 @@ typedef union {
     };
 } color_t;
 
+typedef enum
+{
+    ThemeLayoutId_Logo,
+    ThemeLayoutId_HbmenuVersion,
+    ThemeLayoutId_LoaderInfo,
+    ThemeLayoutId_AttentionText,
+    ThemeLayoutId_LogInfo,
+    ThemeLayoutId_InfoMsg,
+    ThemeLayoutId_MenuPath,
+    ThemeLayoutId_MenuTypeMsg,
+    ThemeLayoutId_MsgBoxSeparator,
+    ThemeLayoutId_MsgBoxBottomText,
+    ThemeLayoutId_BackgroundImage,
+    ThemeLayoutId_BackWave,
+    ThemeLayoutId_MiddleWave,
+    ThemeLayoutId_FrontWave,
+    ThemeLayoutId_ButtonA,
+    ThemeLayoutId_ButtonAText,
+    ThemeLayoutId_ButtonB,
+    ThemeLayoutId_ButtonBText,
+    ThemeLayoutId_ButtonY,
+    ThemeLayoutId_ButtonYText,
+    ThemeLayoutId_ButtonM,
+    ThemeLayoutId_ButtonMText,
+    ThemeLayoutId_ButtonX,
+    ThemeLayoutId_ButtonXText,
+    ThemeLayoutId_NetworkIcon,
+    ThemeLayoutId_BatteryCharge,
+    ThemeLayoutId_BatteryIcon,
+    ThemeLayoutId_ChargingIcon,
+    ThemeLayoutId_Status,
+    ThemeLayoutId_Temperature,
+    ThemeLayoutId_MenuList,
+    ThemeLayoutId_MenuListTiles,
+    ThemeLayoutId_MenuListIcon,
+    ThemeLayoutId_MenuListName,
+    ThemeLayoutId_MenuActiveEntryIcon,
+    ThemeLayoutId_MenuActiveEntryName,
+    ThemeLayoutId_MenuActiveEntryAuthor,
+    ThemeLayoutId_MenuActiveEntryVersion,
+    ThemeLayoutId_Total,
+} ThemeLayoutId;
+
 // when building for pc we need to include these separately
 #ifndef __SWITCH__
 #include "switch/nro.h"
@@ -64,6 +109,9 @@ typedef union {
 #include "message-box.h"
 #include "power.h"
 #include "netloader.h"
+#include "netstatus.h"
+#include "thermalstatus.h"
+#include "status.h"
 
 void menuStartupPath(void);
 void menuStartup(void);
@@ -93,7 +141,7 @@ static inline void DrawPixel(uint32_t x, uint32_t y, color_t clr)
 {
     if (x >= 1280 || y >= 720)
         return;
-    u32 off = (y * g_framebuf_width + x)*4;
+    u32 off = y*g_framebuf_width + x*4;
     g_framebuf[off] = BlendColor(g_framebuf[off], clr.r, clr.a); off++;
     g_framebuf[off] = BlendColor(g_framebuf[off], clr.g, clr.a); off++;
     g_framebuf[off] = BlendColor(g_framebuf[off], clr.b, clr.a); off++;
@@ -103,7 +151,7 @@ static inline void DrawPixelRaw(uint32_t x, uint32_t y, color_t clr)
 {
     if (x >= 1280 || y >= 720)
         return;
-    u32 off = (y * g_framebuf_width + x)*4;
+    u32 off = y*g_framebuf_width + x*4;
     *((u32*)&g_framebuf[off]) = clr.r | (clr.g<<8) | (clr.b<<16) | (0xff<<24);
 }
 static inline void Draw4PixelsRaw(uint32_t x, uint32_t y, color_t clr)
@@ -113,12 +161,12 @@ static inline void Draw4PixelsRaw(uint32_t x, uint32_t y, color_t clr)
 
     u32 color = clr.r | (clr.g<<8) | (clr.b<<16) | (0xff<<24);
     u128 val = color | ((u128)color<<32) | ((u128)color<<64) | ((u128)color<<96);
-    u32 off = (y * g_framebuf_width + x)*4;
+    u32 off = y*g_framebuf_width + x*4;
     *((u128*)&g_framebuf[off]) = val;
 }
 static inline color_t FetchPixelColor(uint32_t x, uint32_t y)
 {
-    u32 off = (y * g_framebuf_width + x)*4;
+    u32 off = y*g_framebuf_width + x*4;
     u32 val = *((u32*)&g_framebuf[off]);
     u8 r = (u8)val;
     u8 g = (u8)(val>>8);
@@ -158,6 +206,8 @@ static inline color_t FetchPixelColor(uint32_t x, uint32_t y)
 
 void DrawPixel(uint32_t x, uint32_t y, color_t clr);
 void DrawText(u32 font, uint32_t x, uint32_t y, color_t clr, const char* text);
+void DrawTextFromLayout(ThemeLayoutId id, color_t clr, const char* text);
+void DrawTextFromLayoutRelative(ThemeLayoutId id, int base_x, int base_y, int *inPos, int *outPos, color_t clr, const char* text, const char align);
 void DrawTextTruncate(u32 font, uint32_t x, uint32_t y, color_t clr, const char* text, uint32_t max_width, const char* end_text);
 void GetTextDimensions(u32 font, const char* text, uint32_t* width_out, uint32_t* height_out);
 uint32_t GetTextXCoordinate(u32 font, uint32_t rX, const char* text, const char align);

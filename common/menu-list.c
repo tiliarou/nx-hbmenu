@@ -96,20 +96,34 @@ static void menuSort(void) {
     menu_s* m = &s_menu[!s_curMenu];
     int nEntries = m->nEntries;
     if (nEntries==0) return;
+    int nEntriesStar = 0, nEntriesNoStar = 0;
 
     menuEntry_s** list = (menuEntry_s**)calloc(nEntries, sizeof(menuEntry_s*));
     if(list == NULL) return;
+    menuEntry_s** listStar = (menuEntry_s**)calloc(nEntries, sizeof(menuEntry_s*));
+    if(listStar == NULL) {
+        free(list);
+        return;
+    }
 
     menuEntry_s* p = m->firstEntry;
     for(i = 0; i < nEntries; ++i) {
-        list[i] = p;
+        if (p->starred)
+            listStar[nEntriesStar++] = p;
+        else
+            list[nEntriesNoStar++] = p;
         p = p->next;
     }
 
-    qsort(list, nEntries, sizeof(menuEntry_s*), menuEntryCmp);
+    qsort(listStar, nEntriesStar, sizeof(menuEntry_s*), menuEntryCmp);
+    qsort(list, nEntriesNoStar, sizeof(menuEntry_s*), menuEntryCmp);
 
     menuEntry_s** pp = &m->firstEntry;
-    for(i = 0; i < nEntries; ++i) {
+    for(i = 0; i < nEntriesStar; ++i) {
+        *pp = listStar[i];
+        pp = &(*pp)->next;
+    }
+    for(i = 0; i < nEntriesNoStar; ++i) {
         *pp = list[i];
         pp = &(*pp)->next;
     }
@@ -117,12 +131,32 @@ static void menuSort(void) {
     *pp = NULL;
 
     free(list);
+    free(listStar);
+}
+
+void menuReorder (void) {
+    s_curMenu = !s_curMenu;
+    menuSort();
+    s_curMenu = !s_curMenu;
+    menuClear();
 }
 
 int menuScan(const char* target) {
+    int pos;
+    char dirsep[8];
+
     if (chdir(target) < 0) return 1;
     if (getcwd(s_menu[!s_curMenu].dirname, PATH_MAX+1) == NULL)
         return 1;
+
+    memset(dirsep, 0, sizeof(dirsep));
+    dirsep[0] = '/';
+
+    //While cwd will not have '/' at the end normally, it will have it when cwd is the root dir ("sdmc:/"). Don't add '/' to the path below when it's already present.
+    pos = strlen(s_menu[!s_curMenu].dirname);
+    if (pos > 0) {
+        if (s_menu[!s_curMenu].dirname[pos-1] == '/') dirsep[0] = 0;
+    }
 
     DIR* dir;
     struct dirent* dp;
@@ -140,13 +174,12 @@ int menuScan(const char* target) {
         bool entrytype=0;
 
         memset(tmp_path, 0, sizeof(tmp_path));
-        snprintf(tmp_path, sizeof(tmp_path)-1, "%s/%s", s_menu[!s_curMenu].dirname, dp->d_name);
+        snprintf(tmp_path, sizeof(tmp_path)-1, "%s%s%s", s_menu[!s_curMenu].dirname, dirsep, dp->d_name);
 
-        #ifdef __SWITCH__
-        fsdev_dir_t* dirSt = (fsdev_dir_t*)dir->dirData->dirStruct;
-        FsDirectoryEntry* entry = &dirSt->entry_data[dirSt->index];
-
-        entrytype = entry->type == ENTRYTYPE_DIR;
+        #ifdef _DIRENT_HAVE_D_TYPE
+        if (dp->d_type == DT_UNKNOWN)
+            continue;
+        entrytype = dp->d_type != DT_REG;
         #else
         struct stat tmpstat;
 
@@ -174,7 +207,7 @@ int menuScan(const char* target) {
         strncpy(me->path, tmp_path, sizeof(me->path)-1);
         me->path[sizeof(me->path)-1] = 0;
 
-        if (menuEntryLoad(me, dp->d_name, shortcut))
+        if (menuEntryLoad(me, dp->d_name, shortcut, true))
             menuAddEntry(me);
         else
             menuDeleteEntry(me, 0);
@@ -212,7 +245,7 @@ int themeMenuScan(const char* target) {
         snprintf(tmp_path, sizeof(tmp_path)-1, "%s/%s", s_menu[!s_curMenu].dirname, dp->d_name);
 
         const char* ext = getExtension(dp->d_name);
-        if (strcasecmp(ext, ".cfg")==0)
+        if (strcasecmp(ext, ".cfg")==0 || strcasecmp(ext, ".romfs")==0)
             me = menuCreateEntry(ENTRY_TYPE_THEME);
 
         if (!me)
@@ -220,7 +253,7 @@ int themeMenuScan(const char* target) {
 
         strncpy(me->path, tmp_path, sizeof(me->path)-1);
         me->path[sizeof(me->path)-1] = 0;
-        if (menuEntryLoad(me, dp->d_name, shortcut))
+        if (menuEntryLoad(me, dp->d_name, shortcut, true))
             menuAddEntry(me);
         else
             menuDeleteEntry(me, 0);
@@ -232,7 +265,7 @@ int themeMenuScan(const char* target) {
     menuEntry_s* me = menuCreateEntry(ENTRY_TYPE_THEME);
 
     if(me) {
-        if(menuEntryLoad(me, textGetString(StrId_DefaultThemeName), false))//Create Default theme Menu Entry
+        if(menuEntryLoad(me, textGetString(StrId_DefaultThemeName), false, false))//Create Default theme Menu Entry
             menuAddEntryToFront(me);
         else
             menuDeleteEntry(me, 0);

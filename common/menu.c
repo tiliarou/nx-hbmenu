@@ -8,7 +8,14 @@
 
 char rootPathBase[PATH_MAX];
 char rootPath[PATH_MAX+8];
+
+uint8_t *folder_icon_large, *folder_icon_small;
+uint8_t *invalid_icon_large, *invalid_icon_small;
+uint8_t *theme_icon_large, *theme_icon_small;
+
 void computeFrontGradient(color_t baseColor, int height);
+
+void menuLoadFileassoc(void);
 
 char *menuGetRootPath(void) {
     return rootPath;
@@ -27,6 +34,35 @@ void launchMenuEntryTask(menuEntry_s* arg) {
         launchApplyThemeTask(me);
     else
         launchMenuEntry(me);
+}
+
+void toggleStarState(menuEntry_s* arg) {
+    menuEntry_s* me = arg;
+    if (me->starred) {
+        if (fileExists(me->starpath))
+            remove(me->starpath);
+    } else {
+        if (!fileExists(me->starpath)) {
+            FILE* f  = fopen(me->starpath, "w");
+            if (f) fclose(f);
+        }
+    }
+    me->starred = fileExists(me->starpath);
+    //todo: error handling/message?
+
+    menuReorder();
+    menu_s* menu = menuGetCurrent();
+    menuEntry_s* meSearch = menu->firstEntry;
+    menu->curEntry = -1;
+    int i = 0;
+    while (menu->curEntry < 0) {
+        if (me == meSearch)
+            menu->curEntry = i;
+        else {
+            meSearch = meSearch->next;
+            i++;
+        }
+    }
 }
 
 static enum
@@ -73,11 +109,74 @@ void menuHandleAButton(void) {
     }
 }
 
+void menuHandleXButton(void) {
+    menu_s* menu = menuGetCurrent();
+
+    if (menu->nEntries > 0 && hbmenu_state == HBMENU_DEFAULT) {
+        int i;
+        menuEntry_s* me;
+        for (i = 0, me = menu->firstEntry; i != menu->curEntry; i ++, me = me->next);
+        toggleStarState(me);
+    }
+}
+
+void menuStartupCommon(void) {
+    free(folder_icon_large);
+    free(folder_icon_small);
+    free(invalid_icon_large);
+    free(invalid_icon_small);
+    free(theme_icon_large);
+    free(theme_icon_small);
+
+    ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuActiveEntryIcon];
+    ThemeLayoutObject *layoutobj2 = &themeCurrent.layoutObjects[ThemeLayoutId_MenuListIcon];
+    assetsDataEntry *data = NULL;
+
+    assetsGetData(AssetId_folder_icon, &data);
+    folder_icon_large = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj->size[0], layoutobj->size[1], data->imageMode);
+    folder_icon_small = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj2->size[0], layoutobj2->size[1], data->imageMode);
+    assetsGetData(AssetId_invalid_icon, &data);
+    invalid_icon_large = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj->size[0], layoutobj->size[1], data->imageMode);
+    invalid_icon_small = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj2->size[0], layoutobj2->size[1], data->imageMode);
+    if(themeGlobalPreset == THEME_PRESET_DARK)
+        assetsGetData(AssetId_theme_icon_dark, &data);
+    else
+        assetsGetData(AssetId_theme_icon_light, &data);
+    theme_icon_large = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj->size[0], layoutobj->size[1], data->imageMode);
+    theme_icon_small = downscaleImg(data->buffer, layoutobj->imageSize[0], layoutobj->imageSize[1], layoutobj2->size[0], layoutobj2->size[1], data->imageMode);
+
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_FrontWave];
+    computeFrontGradient(themeCurrent.frontWaveColor, layoutobj->size[1]);
+}
+
+void menuThemeSelectCurrentEntry(void) {
+    menu_s* menu = menuGetCurrent();
+    char themePath[PATH_MAX] = {0};
+    GetThemePathFromConfig(themePath, PATH_MAX);
+    if (themePath[0]==0) menu->curEntry = 0;
+    else {
+        int i;
+        menuEntry_s* me;
+        for (i = 0, me = menu->firstEntry; me != NULL; i ++, me = me->next) {
+            if (strcmp(me->path, themePath)==0) {
+                menu->curEntry = i;
+                break;
+            }
+        }
+    }
+}
+
 void launchApplyThemeTask(menuEntry_s* arg) {
     const char* themePath = arg->path;
+    menu_s* menu = menuGetCurrent();
     SetThemePathToConfig(themePath);
     themeStartup(themeGlobalPreset);
-    computeFrontGradient(themeCurrent.frontWaveColor, 280); 
+    menuStartupCommon();
+    menuLoadFileassoc();
+    if (hbmenu_state == HBMENU_THEME_MENU) { // Normally this should never be used outside of theme-menu.
+        themeMenuScan(menu->dirname);
+        menuThemeSelectCurrentEntry();
+    } else menuScan(menu->dirname);
 }
 
 bool menuIsNetloaderActive(void) {
@@ -124,20 +223,18 @@ static void drawIcon(int x, int y, int width, int height, const uint8_t *image, 
     }
 }
 
-uint8_t *folder_icon_small;
-uint8_t *invalid_icon_small;
-uint8_t *theme_icon_small;
-
 static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
+    ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuList];
     int x, y;
-    int start_y = 720 - 100 - 145;//*(n % 2);
-    int end_y = start_y + 140 + 32;
+    int start_y = layoutobj->posStart[1];//*(n % 2);
+    int end_y = start_y + layoutobj->size[1];
     int start_x = off_x;//(n / 2);
-    int end_x = start_x + 140;
+    int end_x = start_x + layoutobj->size[0];
     int j;
 
     const uint8_t *smallimg = NULL;
     const uint8_t *largeimg = NULL;
+    char *strptr = NULL;
     char tmpstr[1024];
 
     int border_start_x, border_end_x;
@@ -153,7 +250,7 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
 
     if (is_active) {
         highlight_multiplier = fmax(0.0, fabs(fmod(menuTimer, 1.0) - 0.5) / 0.5);
-        border_color = MakeColor(themeCurrent.highlightColor.r + (255 - themeCurrent.highlightColor.r) * highlight_multiplier, themeCurrent.highlightColor.g + (255 - themeCurrent.highlightColor.g) * highlight_multiplier, themeCurrent.highlightColor.b + (255 - themeCurrent.highlightColor.b) * highlight_multiplier, 255);
+        border_color = MakeColor(themeCurrent.highlightColor.r + (themeCurrent.highlightGradientEdgeColor.r - themeCurrent.highlightColor.r) * highlight_multiplier, themeCurrent.highlightColor.g + (themeCurrent.highlightGradientEdgeColor.g - themeCurrent.highlightColor.g) * highlight_multiplier, themeCurrent.highlightColor.b + (themeCurrent.highlightGradientEdgeColor.b - themeCurrent.highlightColor.b) * highlight_multiplier, 255);
         border_start_x = start_x-6;
         border_end_x = end_x+6;
         border_start_y = start_y-5;
@@ -231,29 +328,29 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
     }
     else if (me->type == ENTRY_TYPE_FOLDER) {
         smallimg = folder_icon_small;
-        largeimg = assetsGetDataBuffer(AssetId_folder_icon);
+        largeimg = folder_icon_large;
     }
     else if (me->type == ENTRY_TYPE_THEME){
         smallimg = theme_icon_small;
-        if(themeGlobalPreset == THEME_PRESET_DARK)
-            largeimg = assetsGetDataBuffer(AssetId_theme_icon_dark);
-        else largeimg = assetsGetDataBuffer(AssetId_theme_icon_light);
+        largeimg = theme_icon_large;
     }
     else {
         smallimg = invalid_icon_small;
-        largeimg = assetsGetDataBuffer(AssetId_invalid_icon);
+        largeimg = invalid_icon_large;
     }
 
     if (smallimg) {
-        drawImage(start_x, start_y + 32, 140, 140, smallimg, IMAGE_MODE_RGB24);
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuListIcon];
+        drawImage(start_x + layoutobj->posStart[0], start_y + layoutobj->posStart[1], layoutobj->size[0], layoutobj->size[1], smallimg, IMAGE_MODE_RGB24);
     }
 
-    if (is_active && largeimg) {
-        drawImage(117, 100, 256, 256, largeimg, IMAGE_MODE_RGB24);
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuActiveEntryIcon];
+    if (is_active && largeimg && layoutobj->visible) {
+        drawImage(layoutobj->posStart[0], layoutobj->posStart[1], layoutobj->size[0], layoutobj->size[1], largeimg, IMAGE_MODE_RGB24);
 
-        shadow_start_y = 100+256;
-        border_start_x = 117;
-        border_end_x = 117+256;
+        shadow_start_y = layoutobj->posStart[1]+layoutobj->size[1];
+        border_start_x = layoutobj->posStart[0];
+        border_end_x = layoutobj->posStart[0]+layoutobj->size[0];
 
         for (shadow_y=shadow_start_y; shadow_y <shadow_start_y+shadow_size; shadow_y++) {
             for (x=border_start_x; x<border_end_x; x++) {
@@ -267,21 +364,31 @@ static void drawEntry(menuEntry_s* me, int off_x, int is_active) {
         }
     }
 
-    DrawTextTruncate(interuiregular14, start_x + 4, start_y + 4 + 18, themeCurrent.borderTextColor, me->name, 140 - 32, "...");
+    if (me->type != ENTRY_TYPE_THEME)
+        strptr = me->starred ? themeCurrent.labelStarOnText : "";
+    else
+        strptr = "";
+
+    memset(tmpstr, 0, sizeof(tmpstr));
+    snprintf(tmpstr, sizeof(tmpstr)-1, "%s%s", strptr, me->name);
+
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuListName];
+    DrawTextTruncate(layoutobj->font, start_x + layoutobj->posStart[0], start_y + layoutobj->posStart[1], themeCurrent.borderTextColor, tmpstr, layoutobj->size[0], "...");
 
     if (is_active) {
-        start_x = 1280 - 790;
-        start_y = 135;
-
-        DrawTextTruncate(interuimedium30, start_x, start_y + 39, themeCurrent.textColor, me->name, 1280 - start_x - 120 ,"...");
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuActiveEntryName];
+        if (layoutobj->visible) DrawTextTruncate(layoutobj->font, layoutobj->posStart[0], layoutobj->posStart[1], themeCurrent.textColor, tmpstr, layoutobj->size[0], "...");
 
         if (me->type != ENTRY_TYPE_FOLDER) {
             memset(tmpstr, 0, sizeof(tmpstr));
             snprintf(tmpstr, sizeof(tmpstr)-1, "%s: %s", textGetString(StrId_AppInfo_Author), me->author);
-            DrawText(interuiregular14, start_x, start_y + 28 + 30 + 18, themeCurrent.textColor, tmpstr);
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuActiveEntryAuthor];
+            if (layoutobj->visible) DrawText(layoutobj->font, layoutobj->posStart[0], layoutobj->posStart[1], themeCurrent.textColor, tmpstr);
+
             memset(tmpstr, 0, sizeof(tmpstr));
             snprintf(tmpstr, sizeof(tmpstr)-1, "%s: %s", textGetString(StrId_AppInfo_Version), me->version);
-            DrawText(interuiregular14, start_x, start_y + 28 + 30 + 18 + 6 + 18, themeCurrent.textColor, tmpstr);
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuActiveEntryVersion];
+            if (layoutobj->visible) DrawText(layoutobj->font, layoutobj->posStart[0], layoutobj->posStart[1], themeCurrent.textColor, tmpstr);
         }
     }
 }
@@ -293,6 +400,8 @@ void computeFrontGradient(color_t baseColor, int height) {
     int alpha;
     float dark_mult, dark_sub = 75;
     color_t color;
+
+    if (height < 0 || height > 720) return;
 
     for (y=0; y<720; y++) {
         alpha = y - (720 - height);
@@ -342,22 +451,20 @@ void menuStartupPath(void) {
     }
 }
 
-void menuStartup(void) {
+void menuLoadFileassoc(void) {
     char tmp_path[PATH_MAX+28];
 
+    memset(tmp_path, 0, sizeof(tmp_path)-1);
     snprintf(tmp_path, sizeof(tmp_path)-1, "%s/config/nx-hbmenu/fileassoc", rootPathBase);
     menuFileassocScan(tmp_path);
+}
+
+void menuStartup(void) {
+    menuLoadFileassoc();
 
     menuScan(rootPath);
 
-    folder_icon_small = downscaleImg(assetsGetDataBuffer(AssetId_folder_icon), 256, 256, 140, 140, IMAGE_MODE_RGB24);
-    invalid_icon_small = downscaleImg(assetsGetDataBuffer(AssetId_invalid_icon), 256, 256, 140, 140, IMAGE_MODE_RGB24);
-    if(themeGlobalPreset == THEME_PRESET_DARK)
-        theme_icon_small = downscaleImg(assetsGetDataBuffer(AssetId_theme_icon_dark), 256, 256, 140, 140, IMAGE_MODE_RGB24);
-    else
-        theme_icon_small = downscaleImg(assetsGetDataBuffer(AssetId_theme_icon_light), 256, 256, 140, 140, IMAGE_MODE_RGB24);
-    computeFrontGradient(themeCurrent.frontWaveColor, 280);
-    //menuCreateMsgBox(780, 300, "This is a test");
+    menuStartupCommon();
 }
 
 void themeMenuStartup(void) {
@@ -368,6 +475,7 @@ void themeMenuStartup(void) {
     snprintf(tmp_path, sizeof(tmp_path)-1, "%s%s%s%s%s%s%s", rootPathBase, DIRECTORY_SEPARATOR, "config", DIRECTORY_SEPARATOR, "nx-hbmenu" , DIRECTORY_SEPARATOR, "themes");
 
     themeMenuScan(tmp_path);
+    menuThemeSelectCurrentEntry();
 }
 
 color_t waveBlendAdd(color_t a, color_t b, float alpha) {
@@ -379,6 +487,7 @@ void drawWave(int id, float timer, color_t color, int height, float phase, float
     float wave_top_y, alpha, one_minus_alpha;
     color_t existing_color, new_color;
 
+    if (height < 0 || height > 720) return;
     height = 720 - height;
 
     for (x=0; x<1280; x++) {
@@ -414,9 +523,53 @@ void drawWave(int id, float timer, color_t color, int height, float phase, float
     }
 }
 
-void drawTime() {
+void drawCharge() {
+    char chargeString[5];
+    uint32_t batteryCharge;
+    bool isCharging;
+    bool validPower;
 
-    char timeString[9];
+    validPower = powerGetDetails(&batteryCharge, &isCharging);
+
+    if (validPower)
+    {
+        batteryCharge = (batteryCharge > 100) ? 100 : batteryCharge;
+
+        sprintf(chargeString, "%d%%", batteryCharge);
+
+        ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_BatteryCharge];
+
+        if (layoutobj->visible) {
+            int tmpX = GetTextXCoordinate(layoutobj->font, layoutobj->posStart[0], chargeString, 'r');
+            DrawText(layoutobj->font, tmpX, layoutobj->posStart[1], themeCurrent.textColor, chargeString);
+        }
+
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_BatteryIcon];
+        assetsDataEntry *data = NULL;
+        assetsGetData(AssetId_battery_icon, &data);
+        if (layoutobj->visible) drawIcon(layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], data->imageSize[1], data->buffer, themeCurrent.textColor);
+
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ChargingIcon];
+        assetsGetData(AssetId_charging_icon, &data);
+        if (isCharging && layoutobj->visible)
+            drawIcon(layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], data->imageSize[1], data->buffer, themeCurrent.textColor);
+    }
+}
+
+void drawNetwork(int tmpX, AssetId id) {
+    ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_NetworkIcon];
+    assetsDataEntry *data = NULL;
+    assetsGetData(id, &data);
+    if (layoutobj->visible) drawIcon(layoutobj->posType ? tmpX + layoutobj->posStart[0] : layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], data->imageSize[1], data->buffer, themeCurrent.textColor);
+}
+
+u32 drawStatus() {
+    bool netstatusFlag=0;
+    bool temperatureFlag=0;
+    s32 temperature=0;
+    AssetId id;
+
+    char tmpstr[32];
 
     time_t unixTime = time(NULL);
     struct tm* timeStruct = localtime((const time_t *)&unixTime);
@@ -425,45 +578,33 @@ void drawTime() {
     int minutes = timeStruct->tm_min;
     int seconds = timeStruct->tm_sec;
 
-    sprintf(timeString, "%02d:%02d:%02d", hours, minutes, seconds);
+    snprintf(tmpstr, sizeof(tmpstr)-1, "%02d:%02d:%02d", hours, minutes, seconds);
 
-    int tmpX = GetTextXCoordinate(interuimedium20, 1180, timeString, 'r');
+    ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_Status];
 
-    DrawText(interuimedium20, tmpX, 0 + 47 + 10, themeCurrent.textColor, timeString);
+    u32 tmpX = GetTextXCoordinate(layoutobj->font, layoutobj->posStart[0], tmpstr, 'r');
 
+    if (layoutobj->visible) DrawText(layoutobj->font, tmpX, layoutobj->posStart[1], themeCurrent.textColor, tmpstr);
+
+    drawCharge();
+
+    if (statusGet(&netstatusFlag, &id, &temperatureFlag, &temperature)) {
+        if (netstatusFlag) drawNetwork(tmpX, id);
+        if (temperatureFlag) {
+            snprintf(tmpstr, sizeof(tmpstr)-1, "%.1f°C", ((float)temperature) / 1000);
+            DrawTextFromLayout(ThemeLayoutId_Temperature, themeCurrent.textColor, tmpstr);
+        }
+    }
+
+    return tmpX;
 }
 
-void drawCharge() {
-    char chargeString[5];
-    uint32_t batteryCharge;
-    bool isCharging;
-    bool validPower;
+void drawButtons(menu_s* menu, bool emptyDir, int *out_basePos) {
+    ThemeLayoutObject *layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonA];
+    int basePos[2]={0};
 
-    validPower = powerGetDetails(&batteryCharge, &isCharging);
-    
-    if (validPower)
-    {
-        batteryCharge = (batteryCharge > 100) ? 100 : batteryCharge;
-
-        sprintf(chargeString, "%d%%", batteryCharge);
-        
-        int tmpX = GetTextXCoordinate(interuiregular14, 1180, chargeString, 'r');
-
-        DrawText(interuiregular14, tmpX - 15, 0 + 47 + 10 + 21, themeCurrent.textColor, chargeString);
-        drawIcon(1180 - 11, 0 + 47 + 10 + 6, 10, 15, assetsGetDataBuffer(AssetId_battery_icon), themeCurrent.textColor);
-        if (isCharging)
-            drawIcon(tmpX - 32, 0 + 47 + 10 + 6, 9, 15, assetsGetDataBuffer(AssetId_charging_icon), themeCurrent.textColor);
-    }
-}
-
-void drawButtons(menu_s* menu, bool emptyDir, int *x_image_out) {
-    int x_image = 1280 - 252 - 30 - 32;
-    int x_text = 1280 - 216 - 30 - 32;
-
-    if(emptyDir) {
-        x_image = 1280 - 126 - 30 - 32;
-         x_text = 1280 - 90 - 30 - 32;
-    }
+    basePos[0] = layoutobj->posStart[0];
+    basePos[1] = layoutobj->posStart[1];
 
     #ifdef __SWITCH__
     if (strcmp( menu->dirname, "sdmc:/") != 0)
@@ -471,27 +612,26 @@ void drawButtons(menu_s* menu, bool emptyDir, int *x_image_out) {
     if (strcmp( menu->dirname, "/") != 0)
     #endif
     {
-        //drawImage(x_image, 720 - 48, 32, 32, themeCurrent.buttonBImage, IMAGE_MODE_RGBA32);
-        DrawText(fontscale7, x_image, 720 - 47 + 26, themeCurrent.textColor, themeCurrent.buttonBText);//Display the 'B' button from SharedFont.
-        DrawText(interuimedium20, x_text, 720 - 47 + 26, themeCurrent.textColor, textGetString(StrId_Actions_Back));
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonBText];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonBText, basePos[0], basePos[1], !emptyDir ? layoutobj->posStart : layoutobj->posEnd, basePos, themeCurrent.textColor, textGetString(StrId_Actions_Back), 'l');
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonB];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonB, basePos[0], basePos[1], layoutobj->posStart, basePos, themeCurrent.textColor, themeCurrent.buttonBText, 'l');
     }
 
     if(hbmenu_state == HBMENU_DEFAULT)
     {
-        x_text = GetTextXCoordinate(interuiregular18, x_image - 32, textGetString(StrId_NetLoader), 'r');
-        x_image = x_text - 36;
-        *x_image_out = x_image - 40;
-
-        DrawText(fontscale7, x_image, 720 - 47 + 26, themeCurrent.textColor, themeCurrent.buttonYText);
-        DrawText(interuiregular18, x_text, 720 - 47 + 26, themeCurrent.textColor, textGetString(StrId_NetLoader));
-
-        x_text = GetTextXCoordinate(interuiregular18, x_image - 32, textGetString(StrId_ThemeMenu), 'r');
-        x_image = x_text - 36;
-        *x_image_out = x_image - 40;
-
-        DrawText(fontscale7, x_image, 720 - 47 + 26, themeCurrent.textColor, themeCurrent.buttonMText);
-        DrawText(interuiregular18, x_text, 720 - 47 + 26, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonYText];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonYText, basePos[0], basePos[1], layoutobj->posStart, basePos, themeCurrent.textColor, textGetString(StrId_NetLoader), 'r');
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonY];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonY, basePos[0], basePos[1], layoutobj->posStart, basePos, themeCurrent.textColor, themeCurrent.buttonYText, 'l');
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonMText];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonMText, basePos[0], basePos[1], layoutobj->posStart, basePos, themeCurrent.textColor, textGetString(StrId_ThemeMenu), 'r');
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonM];
+        DrawTextFromLayoutRelative(ThemeLayoutId_ButtonM, basePos[0], basePos[1], layoutobj->posStart, basePos, themeCurrent.textColor, themeCurrent.buttonMText, 'l');
     }
+
+    out_basePos[0] = basePos[0];
+    out_basePos[1] = basePos[1];
 }
 
 void menuUpdateNetloader(netloaderState *netloader_state) {
@@ -526,39 +666,88 @@ void menuLoop(void) {
     menuEntry_s* me;
     menu_s* menu = NULL;
     int i;
-    int x, y;
-    int menupath_x_endpos = 918 + 40;
+    int x, y, endy = 720;
+    int curPos[2]={0};
     netloaderState netloader_state;
+    ThemeLayoutObject *layoutobj = NULL;
 
-    for (y=0; y<450; y++) {
+    for (i=0; i<3; i++) {
+        if (i==2) layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_BackWave];
+        if (i==1) layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MiddleWave];
+        if (i==0) layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_FrontWave];
+        if (layoutobj->visible && layoutobj->size[1] >= 0 && layoutobj->size[1] <= 720-10) {
+            endy = 720 - layoutobj->size[1] + 10;
+            break;
+        }
+    }
+
+    for (y=0; y<endy; y++) {
         for (x=0; x<1280; x+=4) {// don't draw bottom pixels as they are covered by the waves
             Draw4PixelsRaw(x, y, themeCurrent.backgroundColor);
         }
     }
 
-    drawWave(0, menuTimer, themeCurrent.backWaveColor, 295, 0.0, 3.0);
-    drawWave(1, menuTimer, themeCurrent.middleWaveColor, 290, 2.0, 3.5);
-    drawWave(2, menuTimer, themeCurrent.frontWaveColor, 280, 4.0, -2.5);
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_BackgroundImage];
+    assetsDataEntry *data = NULL;
+    assetsGetData(AssetId_background_image, &data);
+    if (layoutobj->visible && data) drawImage(layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], endy < data->imageSize[1] ? endy : data->imageSize[1], data->buffer, data->imageMode);
+
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_BackWave];
+    if (layoutobj->visible) drawWave(0, menuTimer, themeCurrent.backWaveColor, layoutobj->size[1], 0.0, 3.0);
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MiddleWave];
+    if (layoutobj->visible) drawWave(1, menuTimer, themeCurrent.middleWaveColor, layoutobj->size[1], 2.0, 3.5);
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_FrontWave];
+    if (layoutobj->visible) drawWave(2, menuTimer, themeCurrent.frontWaveColor, layoutobj->size[1], 4.0, -2.5);
     menuTimer += 0.05;
 
-    drawImage(40, 20, 140, 60, themeCurrent.hbmenuLogoImage, IMAGE_MODE_RGBA32);
-    DrawText(interuiregular14, 180, 46 + 18, themeCurrent.textColor, VERSION);
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_Logo];
+    if(themeGlobalPreset == THEME_PRESET_DARK)
+        assetsGetData(AssetId_hbmenu_logo_dark, &data);
+    else assetsGetData(AssetId_hbmenu_logo_light, &data);
+
+    if (layoutobj->visible) {
+        if (!themeCurrent.logoColor_set)
+            drawImage(layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], data->imageSize[1], data->buffer, data->imageMode);
+        else {
+            drawIcon(layoutobj->posStart[0], layoutobj->posStart[1], data->imageSize[0], data->imageSize[1], data->buffer, themeCurrent.logoColor);
+        }
+    }
+
+    DrawTextFromLayout(ThemeLayoutId_HbmenuVersion, themeCurrent.textColor, VERSION);
+    u32 statusXPos = drawStatus();
+
+    #ifdef __SWITCH__
+    AppletType at = appletGetAppletType();
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_AttentionText];
+    if (at != AppletType_Application && at != AppletType_SystemApplication && layoutobj->visible) {
+        const char* appletMode = textGetString(StrId_AppletMode);
+        u32 x_pos = GetTextXCoordinate(layoutobj->font, statusXPos, appletMode, 'r');
+        DrawText(layoutobj->font, layoutobj->posType ? x_pos + layoutobj->posStart[0] : layoutobj->posStart[0], layoutobj->posStart[1], themeCurrent.attentionTextColor, appletMode);
+    }
+    const char* loaderInfo = envGetLoaderInfo();
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_LoaderInfo];
+    if (loaderInfo && layoutobj->visible) {
+        u32 x_pos = layoutobj->posStart[0];
+        char* spacePos = strchr(loaderInfo, ' ');
+        if (spacePos) {
+            char tempbuf[64] = {0};
+            size_t tempsize = spacePos - loaderInfo + 1;
+            if (tempsize > sizeof(tempbuf)-1) tempsize = sizeof(tempbuf)-1;
+            memcpy(tempbuf, loaderInfo, tempsize);
+            x_pos = GetTextXCoordinate(layoutobj->font, layoutobj->posEnd[0], tempbuf, 'r');
+        }
+        DrawText(layoutobj->font, x_pos, layoutobj->posStart[1], themeCurrent.textColor, loaderInfo);
+    }
+    #endif
 
     #ifdef PERF_LOG_DRAW//Seperate from the PERF_LOG define since this might affect perf.
-    extern u64 g_tickdiff_vsync;
     extern u64 g_tickdiff_frame;
 
     char tmpstr[64];
 
-    snprintf(tmpstr, sizeof(tmpstr)-1, "%lu", g_tickdiff_vsync);
-    DrawText(interuiregular14, 180 + 256, 46 + 18, themeCurrent.textColor, tmpstr);
-
     snprintf(tmpstr, sizeof(tmpstr)-1, "%lu", g_tickdiff_frame);
-    DrawText(interuiregular14, 180 + 256, 46 + 16 + 18, themeCurrent.textColor, tmpstr);
+    DrawTextFromLayout(ThemeLayoutId_LogInfo, themeCurrent.textColor, tmpstr);
     #endif
-
-    drawTime();
-    drawCharge();
 
     memset(&netloader_state, 0, sizeof(netloader_state));
     netloaderGetState(&netloader_state);
@@ -574,8 +763,11 @@ void menuLoop(void) {
 
         menuCloseMsgBox();
         menuMsgBoxSetNetloaderState(0, NULL, 0, 0);
+    }
 
-        if (netloader_state.errormsg[0]) menuCreateMsgBox(780,300, netloader_state.errormsg);
+    if (netloader_state.errormsg[0]) {
+        menuCloseMsgBox();
+        menuCreateMsgBox(780,300, netloader_state.errormsg);
     }
 
     if(hbmenu_state == HBMENU_NETLOADER_ACTIVE) {
@@ -595,16 +787,19 @@ void menuLoop(void) {
                 launchMenuEntryTask(netloader_state.me);
             }
         } else {
-            DrawText(interuiregular14, 64, 128 + 18, themeCurrent.textColor, textGetString(StrId_NoAppsFound_Msg));
+            DrawTextFromLayout(ThemeLayoutId_InfoMsg, themeCurrent.textColor, textGetString(StrId_NoAppsFound_Msg));
         }
-        drawButtons(menu, true, &menupath_x_endpos);
+        drawButtons(menu, true, curPos);
     }
     else
     {
         static int v = 0;
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuListTiles];
+        int entries_count = layoutobj->posEnd[0];
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuList];
 
-        if (menu->nEntries > 7) {
-            int wanted_x = clamp(-menu->curEntry * (140 + 30), -(menu->nEntries - 7) * (140 + 30), 0);
+        if (menu->nEntries > entries_count) {
+            int wanted_x = clamp(-menu->curEntry * layoutobj->posEnd[0], -(menu->nEntries - entries_count) * layoutobj->posEnd[0], 0);
             menu->xPos += v;
             v += (wanted_x - menu->xPos) / 3;
             v /= 2;
@@ -617,7 +812,8 @@ void menuLoop(void) {
 
         // Draw menu entries
         for (me = menu->firstEntry, i = 0; me; me = me->next, i ++) {
-            int entry_start_x = 29 + i * (140 + 30);
+            int entry_start_x = layoutobj->posStart[0] + i * layoutobj->posEnd[0];
+            int entry_draw_x = entry_start_x + menu->xPos;
 
             int screen_width = 1280;
             if (entry_start_x >= (screen_width - menu->xPos))
@@ -628,37 +824,61 @@ void menuLoop(void) {
             if (is_active)
                 active_entry = me;
 
-            drawEntry(me, entry_start_x + menu->xPos, is_active);
+            if (!is_active && entry_draw_x < -(layoutobj->posStart[0] + layoutobj->posEnd[0]))
+                continue;
+
+            drawEntry(me, entry_draw_x, is_active);
         }
 
-        int getX = GetTextXCoordinate(interuiregular18, 1180, textGetString(StrId_ThemeMenu), 'r');
+        layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuTypeMsg];
+        int getX=0;
 
-        if(hbmenu_state == HBMENU_THEME_MENU) {
-            DrawText(interuiregular18, getX, 30 + 26 + 32 + 10, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
-        } else {
-            //DrawText(interuiregular18, getX, 30 + 26 + 32 + 10, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
-            //DrawText(fontscale7, getX - 40,  30 + 26 + 32 + 10, themeCurrent.textColor, themeCurrent.buttonMText);
+        if (layoutobj->visible) {
+            getX = GetTextXCoordinate(layoutobj->font, layoutobj->posStart[0], textGetString(StrId_ThemeMenu), 'r');
+
+            if(hbmenu_state == HBMENU_THEME_MENU) {
+                DrawText(layoutobj->font, getX, layoutobj->posStart[1], themeCurrent.textColor, textGetString(StrId_ThemeMenu));
+            } else {
+                //DrawText(interuiregular18, getX, 30 + 26 + 32 + 10, themeCurrent.textColor, textGetString(StrId_ThemeMenu));
+                //DrawText(fontscale7, getX - 40,  30 + 26 + 32 + 10, themeCurrent.textColor, themeCurrent.buttonMText);
+            }
         }
-        
+
         if(active_entry != NULL) {
-            if (active_entry->type == ENTRY_TYPE_THEME) {
-                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);
-                DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Apply));
-            }
-            else if (active_entry->type != ENTRY_TYPE_FOLDER) {
-                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);//Display the 'A' button from SharedFont.
-                DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Launch));
-            }
-            else {
-                DrawText(fontscale7, 1280 - 126 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, themeCurrent.buttonAText);
-                DrawText(interuiregular18, 1280 - 90 - 30 - 32, 720 - 47 + 24, themeCurrent.textColor, textGetString(StrId_Actions_Open));
-            }
+            const char *buttonstr = "";
+
+            if (active_entry->type == ENTRY_TYPE_THEME)
+                buttonstr = textGetString(StrId_Actions_Apply);
+            else if (active_entry->type != ENTRY_TYPE_FOLDER)
+                buttonstr = textGetString(StrId_Actions_Launch);
+            else
+                buttonstr = textGetString(StrId_Actions_Open);
+
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonAText];
+            DrawTextFromLayoutRelative(ThemeLayoutId_ButtonAText, curPos[0], curPos[1], layoutobj->posStart, curPos, themeCurrent.textColor, buttonstr, 'l');
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonA];
+            DrawTextFromLayoutRelative(ThemeLayoutId_ButtonA, curPos[0], curPos[1], layoutobj->posStart, curPos, themeCurrent.textColor, themeCurrent.buttonAText, 'l');
         }
 
-        drawButtons(menu, false, &menupath_x_endpos);
+        drawButtons(menu, false, curPos);
+
+        if (active_entry && active_entry->type != ENTRY_TYPE_THEME) {
+            const char *buttonstr = "";
+            if (active_entry->starred)
+                buttonstr = textGetString(StrId_Actions_Unstar);
+            else
+                buttonstr = textGetString(StrId_Actions_Star);
+
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonXText];
+            DrawTextFromLayoutRelative(ThemeLayoutId_ButtonXText, curPos[0], curPos[1], layoutobj->posStart, curPos, themeCurrent.textColor, buttonstr, 'r');
+            layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_ButtonX];
+            DrawTextFromLayoutRelative(ThemeLayoutId_ButtonX, curPos[0], curPos[1], layoutobj->posStart, curPos, themeCurrent.textColor, themeCurrent.buttonXText, 'l');
+        }
+
     }
 
-    DrawTextTruncate(interuiregular18, 40, 720 - 47 + 24, themeCurrent.textColor, menu->dirname, menupath_x_endpos - 40, "...");
+    layoutobj = &themeCurrent.layoutObjects[ThemeLayoutId_MenuPath];
+    if (layoutobj->visible) DrawTextTruncate(layoutobj->font, layoutobj->posStart[0], layoutobj->posStart[1], themeCurrent.textColor, menu->dirname, layoutobj->size[0], "...");
 
     menuDrawMsgBox();
 }

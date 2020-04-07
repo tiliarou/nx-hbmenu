@@ -1,4 +1,4 @@
-﻿#include "language.h"
+#include "language.h"
 
 #ifdef __SWITCH__
 #define STR_JP(_str) [SetLanguage_JA] = _str
@@ -7,12 +7,12 @@
 #define STR_DE(_str) [SetLanguage_DE] = _str
 #define STR_IT(_str) [SetLanguage_IT] = _str
 #define STR_ES(_str) [SetLanguage_ES] = _str, [SetLanguage_ES419] = _str
-#define STR_ZH(_str) [SetLanguage_ZHCN] = _str
+#define STR_ZH_HANS(_str) [SetLanguage_ZHCN] = _str, [SetLanguage_ZHHANS] = _str
 #define STR_KO(_str) [SetLanguage_KO] = _str
 #define STR_NL(_str) [SetLanguage_NL] = _str
 #define STR_PT(_str) [SetLanguage_PT] = _str
 #define STR_RU(_str) [SetLanguage_RU] = _str
-#define STR_TW(_str) [SetLanguage_ZHTW] = _str
+#define STR_ZH_HANT(_str) [SetLanguage_ZHTW] = _str, [SetLanguage_ZHHANT] = _str
 #else
 #define STR_JP(_str) [0] = _str
 #define STR_EN(_str) [1] = _str
@@ -20,15 +20,15 @@
 #define STR_DE(_str) [3] = _str
 #define STR_IT(_str) [4] = _str
 #define STR_ES(_str) [5] = _str
-#define STR_ZH(_str) [6] = _str
+#define STR_ZH_HANS(_str) [6] = _str
 #define STR_KO(_str) [7] = _str
 #define STR_NL(_str) [8] = _str
 #define STR_PT(_str) [9] = _str
 #define STR_RU(_str) [10] = _str
-#define STR_TW(_str) [11] = _str
+#define STR_ZH_HANT(_str) [11] = _str
 #endif
 
-const char* const g_strings[StrId_Max][16] =
+const char* const g_strings[StrId_Max][17] =
 {
     [StrId_Loading] =
     {
@@ -42,8 +42,14 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Laden…"),
         STR_KO("로딩중…"),
         STR_RU("загрузка…"),
-        STR_ZH("加载中…"),
-        STR_TW("加載中…"),
+        STR_ZH_HANS("加载中…"),
+        STR_ZH_HANT("加載中…"),
+    },
+
+    [StrId_AppletMode] =
+    {
+        STR_EN("● Applet Mode ●"),
+        STR_ES("● Modo Applet ●"),
     },
 
     [StrId_Directory] =
@@ -58,8 +64,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Map"),
         STR_KO("디렉토리"),
         STR_RU("каталог"),
-        STR_ZH("目录"),
-        STR_TW("資料夾"),
+        STR_ZH_HANS("目录"),
+        STR_ZH_HANT("資料夾"),
     },
 
     /*[StrId_DefaultLongTitle] =
@@ -74,8 +80,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Homebrew toepassing"),
         STR_KO("홈브류 애플리케이션"),
         STR_RU("приложение хомебреw"),
-        STR_ZH("自制应用程序"),
-        STR_TW("自製程式"),
+        STR_ZH_HANS("自制应用程序"),
+        STR_ZH_HANT("自製程式"),
     },*/
 
     [StrId_DefaultPublisher] =
@@ -90,24 +96,24 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Auteur onbekend"),
         STR_KO("알 수 없는 개발자"),
         STR_RU("неизвестный автор"),
-        STR_ZH("未知作者"),
-        STR_TW("作者不詳"),
+        STR_ZH_HANS("未知作者"),
+        STR_ZH_HANT("作者不詳"),
     },
 
     [StrId_IOError] =
     {
         STR_EN("I/O Error"),
         STR_ES("Error de E/S"),
-        STR_DE("E/A-Fehler"),
+        STR_DE("I/O-Fehler"),
         STR_FR("Erreur d'E/S"),
-        STR_IT("Errore di I/O"),
+        STR_IT("Errore I/O"),
         STR_JP("入出力エラー"),
         STR_PT("Erro de E/S"),
         STR_NL("I/O Fout"),
         STR_KO("입출력 오류"),
         STR_RU("I/O-ошибка"),
-        STR_ZH("读写出错"),
-        STR_TW("讀寫錯誤"),
+        STR_ZH_HANS("读写出错"),
+        STR_ZH_HANT("讀寫錯誤"),
     },
 
     [StrId_CouldNotOpenFile] =
@@ -122,8 +128,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Kan bestand niet openen:\n%s"),
         STR_KO("파일을 열 수 없습니다:\n%s"),
         STR_RU("Не могу открыть файл:\n%s"),
-        STR_ZH("无法打开文件:\n%s"),
-        STR_TW("開啓檔案失敗:\n%s"),
+        STR_ZH_HANS("无法打开文件:\n%s"),
+        STR_ZH_HANT("開啓檔案失敗:\n%s"),
     },
 
     [StrId_NoAppsFound_Title] =
@@ -138,8 +144,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Geen toepassingen gevonden"),
         STR_KO("애플리케이션을 찾을 수 없습니다"),
         STR_RU("приложение не найдено"),
-        STR_ZH("找不到可执行的自制程序"),
-        STR_TW("未能找到可執行的自製程式"),
+        STR_ZH_HANS("找不到可执行的自制程序"),
+        STR_ZH_HANT("未能找到可執行的自製程式"),
     },
 
     [StrId_NoAppsFound_Msg] =
@@ -157,7 +163,7 @@ const char* const g_strings[StrId_Max][16] =
         STR_DE(
             "Auf der SD-Karte wurden keine Anwendungen\n"
             "gefunden. Stelle sicher, dass ein Verzeichnis\n"
-            "namens /switch im Wurzelverzeichnis der SD-Karte\n"
+            "namens /switch im Hauptverzeichnis der SD-Karte\n"
             "existiert und Anwendungen enthält!"
         ),
         STR_FR(
@@ -199,12 +205,12 @@ const char* const g_strings[StrId_Max][16] =
             "Убедитесь, что на карте SD есть каталог с\n"
             "названием switch и она содержит приложения."
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "内存卡找不到任何可执行的应用程序。\n"
             "请在内存卡的根目录建立「switch」子目录，\n"
             "并存放自制应用软件至该目录。"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "記憶體找不到任何可執行的應用程式。\n"
             "請在記憶體建立「switch」資料夾，\n"
             "然後儲存自製軟體到此處。"
@@ -215,15 +221,20 @@ const char* const g_strings[StrId_Max][16] =
     {
         STR_EN("The last application returned an error:"),
         STR_ES("La última aplicación devolvió un error:"),
+        STR_DE("Die letzte Anwendung erzeugte einen Fehler:"),
         STR_FR("La dernière application a retourné une erreur:"),
+        STR_IT("L'ultima applicazione ha restituito un errore:"),
         STR_JP("直前に実行したアプリでエラーが発生しました:"),
         STR_KO("최근 애플리케이션에서 오류가 발생했습니다:"),
-        STR_TW("程式執行時發生錯誤:"),
+        STR_ZH_HANT("程式執行時發生錯誤:"),
     },
 
     [StrId_AppLaunchError] =
     {
         STR_EN("Failed to launch the application:"),
+        STR_DE("Konnte die Anwendung nicht starten:"),
+        STR_FR("Erreur au lancement de l'application"),
+        STR_IT("Errore nell'avvio dell'applicazione:"),
     },
 
     [StrId_AppInfo_Author] =
@@ -238,8 +249,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Auteur"),
         STR_KO("개발자"),
         STR_RU("автор"),
-        STR_ZH("作者"),
-        STR_TW("作者"),
+        STR_ZH_HANS("作者"),
+        STR_ZH_HANT("作者"),
     },
 
     [StrId_AppInfo_Version] =
@@ -254,8 +265,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Versie"),
         STR_KO("버전"),
         STR_RU("Версия"),
-        STR_ZH("版"),
-        STR_TW("版"),
+        STR_ZH_HANS("版"),
+        STR_ZH_HANT("版"),
     },
 
     [StrId_Actions_Launch] =
@@ -264,14 +275,14 @@ const char* const g_strings[StrId_Max][16] =
         STR_ES("Lanzamiento"),
         STR_DE("Starten"),
         STR_FR("Lancement"),
-        STR_IT("Lanciare"),
+        STR_IT("Avvia"),
         STR_JP("起動"),
         STR_PT("Lançamento"),
         STR_NL("Lancering"),
         STR_KO("실행"),
         STR_RU("запуск"),
-        STR_ZH("发射"),
-        STR_TW("啟動"),
+        STR_ZH_HANS("发射"),
+        STR_ZH_HANT("啟動"),
     },
 
     [StrId_Actions_Open] =
@@ -280,16 +291,16 @@ const char* const g_strings[StrId_Max][16] =
         STR_ES("Abrir"),
         STR_DE("Öffnen"),
         STR_FR("Ouvrir"),
-        STR_IT("Aprire"),
+        STR_IT("Apri"),
         STR_JP("開く"),
         STR_PT("Abrir"),
         STR_NL("Open"),
         STR_KO("열기"),
         STR_RU("открыто"),
-        STR_ZH("打开"),
-        STR_TW("開啟"),
+        STR_ZH_HANS("打开"),
+        STR_ZH_HANT("開啟"),
     },
-    
+
     [StrId_Actions_Back] =
     {
         STR_EN("Back"),
@@ -302,54 +313,78 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Terug"),
         STR_KO("뒤로 가기"),
         STR_RU("возвращаться"),
-        STR_ZH("回去"),
-        STR_TW("回去"),
+        STR_ZH_HANS("回去"),
+        STR_ZH_HANT("回去"),
     },
 
     [StrId_MsgBox_OK] =
     {
         STR_EN("OK"),
+        STR_DE("OK"),
         STR_FR("OK"),
+        STR_IT("OK"),
         STR_ES("Aceptar"),
         STR_JP("了解"),
         STR_KO("확인"),
-        STR_TW("確認"),
+        STR_ZH_HANT("確認"),
     },
 
     [StrId_Actions_Apply] =
     {
         STR_EN("Apply"),
         STR_FR("Appliquer"),
+        STR_DE("Anwenden"),
         STR_ES("Aplicar"),
+        STR_IT("Applica"),
         STR_JP("適用"),
         STR_KO("적용"),
-        STR_TW("应用"),
+        STR_ZH_HANT("应用"),
+    },
+
+    [StrId_Actions_Star] =
+    {
+        STR_EN("Star"),
+        STR_ES("Agregar a favoritos"),
+        STR_IT("Aggiungi ai preferiti"),
+    },
+
+    [StrId_Actions_Unstar] =
+    {
+        STR_EN("Unstar"),
+        STR_ES("Borrar de favoritos"),
+        STR_IT("Rimuovi dai preferiti"),
     },
 
     [StrId_ThemeMenu] =
     {
         STR_EN("Theme Menu"),
         STR_FR("Menu Thème"),
+        STR_DE("Theme Menü"),
         STR_ES("Menú temático"),
+        STR_IT("Tema Menu"),
         STR_JP("テーマメニュー"),
         STR_KO("테마 메뉴"),
-        STR_TW("主题菜单"),
+        STR_ZH_HANT("主题菜单"),
     },
 
     [StrId_ThemeNotApplied] =
     {
         STR_EN("Theme cannot be applied because an error occurred."),
+        STR_DE("Das Theme konnte nicht geladen werden, da ein Fehler aufgetreten ist."),
         STR_FR("Le thème ne peut pas être appliqué car une erreur est survenue."),
         STR_ES("El tema no se pudo aplicar porque se ha producido un error."),
+        STR_IT("Il tema non è stato applicato a causa di un errore."),
         STR_JP("エラーが発生したため、テーマを適用できませんでした。"),
         STR_KO("오류가 발생 했기 때문에 테마를 적용할 수 없습니다."),
-        STR_TW("由于发生错误, 无法应用主题。"),
+        STR_ZH_HANT("由于发生错误, 无法应用主题。"),
     },
 
     [StrId_DefaultThemeName] =
     {
         STR_EN("Default Theme"),
         STR_FR("Thème par défaut"),
+        STR_DE("Standard Theme"),
+        STR_IT("Tema di default"),
     },
 
     /*[StrId_Reboot] =
@@ -415,13 +450,13 @@ const char* const g_strings[StrId_Max][16] =
             "  \xEE\x80\x80 Перезагрузите\n"
             "  \xEE\x80\x81 Отмена"
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "无法返回至主机的 \xEE\x81\xB3HOME 菜单。\n"
             "您需要重新启动您的 3DS 设备。\n\n"
             "  \xEE\x80\x80 重启设备\n"
             "  \xEE\x80\x81 取消操作"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "無法返回至主機的 \xEE\x81\xB3HOME 選單。\n"
             "您需要重新啓動您的 3DS 設備。\n\n"
             "  \xEE\x80\x80 重啓設備\n"
@@ -491,13 +526,13 @@ const char* const g_strings[StrId_Max][16] =
             "  \xEE\x80\x81 Отмена\n"
             "  \xEE\x80\x82 Перезагрузите"
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "您即将返回到主機的 \xEE\x81\xB3HOME 菜单。\n\n"
             "  \xEE\x80\x80 确认返回\n"
             "  \xEE\x80\x81 取消操作\n"
             "  \xEE\x80\x82 重启设备"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "您即將返回到主機的 \xEE\x81\xB3HOME 選單。\n\n"
             "  \xEE\x80\x80 確認返回\n"
             "  \xEE\x80\x81 取消操作\n"
@@ -509,7 +544,7 @@ const char* const g_strings[StrId_Max][16] =
     {
         STR_EN("Title selector"),
         STR_ES("Selector de título"),
-        STR_DE("Titel-Selektor"),
+        STR_DE("Titel-Auswahl"),
         STR_FR("Sélecteur de titre"),
         STR_IT("Selettore del titolo"),
         STR_JP("タイトルセレクタ"),
@@ -517,15 +552,15 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Titel selector"),
         STR_KO("타이틀 선택기"),
         STR_RU("Селектор заголовков"),
-        STR_ZH("应用启动器"),
-        STR_TW("自製程式啓動器"),
+        STR_ZH_HANS("应用启动器"),
+        STR_ZH_HANT("自製程式啓動器"),
     },
 
     [StrId_ErrorReadingTitleMetadata] =
     {
         STR_EN("Error reading title metadata.\n%08lX%08lX@%d"),
         STR_ES("Error leyendo los metadatos de los títulos.\n%08lX%08lX@%d"),
-        STR_DE("Fehler beim lesen der Titel-Metadaten.\n%08lX%08lX@%d"),
+        STR_DE("Fehler beim Lesen der Titel-Metadaten.\n%08lX%08lX@%d"),
         STR_FR(
             "Erreur lors de la lecture des métadonnées\n"
             "de titre.\n%08lX%08lX@%d"
@@ -536,8 +571,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Fout bij het lezen van titel metadata.\n%08lX%08lX@%d"),
         STR_KO("타이틀 메타데이터를 읽는데 실패하였습니다.\n%08lX%08lX@%d"),
         STR_RU("Ошибка чтения метаданных заголовка\n.%08lX%08lX@%d"),
-        STR_ZH("读取软件相关信息时发生错误：\n%08lX%08lX@%d"),
-        STR_TW("讀取軟體相關數據時發生錯誤：\n%08lX%08lX@%d"),
+        STR_ZH_HANS("读取软件相关信息时发生错误：\n%08lX%08lX@%d"),
+        STR_ZH_HANT("讀取軟體相關數據時發生錯誤：\n%08lX%08lX@%d"),
     },
 
     [StrId_NoTitlesFound] =
@@ -552,8 +587,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Geen titels gevonden."),
         STR_KO("타이틀을 찾을 수 없습니다."),
         STR_RU("Заголовки не обнаружены"),
-        STR_ZH("主机内找不到任何软件。"),
-        STR_TW("主機内找不到任何軟體。"),
+        STR_ZH_HANS("主机内找不到任何软件。"),
+        STR_ZH_HANT("主機内找不到任何軟體。"),
     },
 
     [StrId_SelectTitle] =
@@ -608,12 +643,12 @@ const char* const g_strings[StrId_Max][16] =
             "  \xEE\x80\x80 Выберите\n"
             "  \xEE\x80\x81 Отмена"
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "请选择一个目标软件。\n\n"
             "  \xEE\x80\x80 确认\n"
             "  \xEE\x80\x81 取消"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "請選擇一個目標軟體。\n\n"
             "  \xEE\x80\x80 確認\n"
             "  \xEE\x80\x81 取消"
@@ -672,12 +707,12 @@ const char* const g_strings[StrId_Max][16] =
             "приложений под целевыми заголовками.\n"
             "Пожалуйста, используйте другой эксплойт."
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "您所利用漏洞启动的「自制软件启动器」，\n"
             "无法在当前选中的软件中启动自制软件。\n"
             "请使用其它的漏洞来启动「自制软件启动器」。"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "您所利用漏洞開啓的「自製軟體啓動器」\n"
             "無法在當前選中的軟體啓動自製軟件。\n"
             "請利用其它漏洞來啓動「自製軟體啓動器」。"
@@ -696,7 +731,7 @@ const char* const g_strings[StrId_Max][16] =
         ),
         STR_DE(
             "Die ausgewählte Anwendung benötigt einen\n"
-            "Titel der nicht installiert ist"
+            "Titel der nicht installiert ist."
         ),
         STR_FR(
             "L'application sélectionnée requiert un titre\n"
@@ -726,11 +761,11 @@ const char* const g_strings[StrId_Max][16] =
             "Для приложения требуется зависимость,\n"
             "которая не установлена."
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "主机找不到该应用程序\n"
             "所需求的软件。"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "主機找不到該應用程式\n"
             "所需求的軟體。"
         ),
@@ -748,8 +783,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("netwerk lader"),
         STR_KO("네트워크 로더"),
         STR_RU("Загрузчик"),
-        STR_ZH("网络执行模块"),
-        STR_TW("網路執行模組"),
+        STR_ZH_HANS("网络执行模块"),
+        STR_ZH_HANT("網路執行模組"),
     },
 
     [StrId_NetLoaderUnavailable] =
@@ -764,8 +799,8 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("De netwerk lader is niet beschikbaar."),
         STR_KO("현재 네트워크 로더는 사용이 불가합니다."),
         STR_RU("Загрузчик в настоящее время недоступен."),
-        STR_ZH("无法启动 nxlink 网络执行模块。"),
-        STR_TW("無法啓動 nxlink 網路執行模組。"),
+        STR_ZH_HANS("无法启动 nxlink 网络执行模块。"),
+        STR_ZH_HANT("無法啓動 nxlink 網路執行模組。"),
     },
 
     [StrId_NetLoaderError] =
@@ -780,19 +815,20 @@ const char* const g_strings[StrId_Max][16] =
         STR_NL("Er is een fout opgetreden\nTechnische details: [%s:%d]"),
         STR_KO("오류가 발생했습니다.\n기술적인 세부사항: [%s:%d]"),
         STR_RU("Произошла ошибка.\nТехнические подробности: [%s:%d]"),
-        STR_ZH("发生错误。\n详细错误信息：[%s:%d]"),
-        STR_TW("發生錯誤。\n詳細錯誤資訊：[%s:%d]"),
+        STR_ZH_HANS("发生错误。\n详细错误信息：[%s:%d]"),
+        STR_ZH_HANT("發生錯誤。\n詳細錯誤資訊：[%s:%d]"),
     },
 
     [StrId_NetLoaderOffline] =
     {
         STR_EN("Offline, waiting for network…"),
+        STR_DE("Offline, warte auf Netzwerk…"),
         STR_FR("Hors-ligne, en attente d'une connection..."),
         STR_IT("Disconnesso, in attesa della connessione…"),
         STR_JP("オフラインです。ネットワーク接続を待っています…"),
         STR_KO("연결 끊김, 네트워크 기다리는 중…"),
-        STR_ZH("无法连接网络，等待网络连接…"),
-        STR_TW("當前離線，等待網路連線…"),
+        STR_ZH_HANS("无法连接网络，等待网络连接…"),
+        STR_ZH_HANT("當前離線，等待網路連線…"),
     },
 
     [StrId_NetLoaderActive] =
@@ -806,7 +842,7 @@ const char* const g_strings[StrId_Max][16] =
             "Dir.IP: %lu.%lu.%lu.%lu, Puerto: %d"
         ),
         STR_DE(
-            "Warte auf Verbindung von 3dslink…\n"
+            "Warte auf Verbindung von nxlink…\n"
             "IP Addr: %lu.%lu.%lu.%lu, Port: %d"
         ),
         STR_FR(
@@ -837,11 +873,11 @@ const char* const g_strings[StrId_Max][16] =
             "Ожидание подключения nxlink…\n"
             "айпи адрес: %lu.%lu.%lu.%lu, Порт: %d"
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "等待 nxlink 连接…\n"
             "IP 地址：%lu.%lu.%lu.%lu，端口：%d"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "等待 nxlink 連接…\n"
             "IP 位址：%lu.%lu.%lu.%lu，連接埠：%d"
         ),
@@ -889,11 +925,11 @@ const char* const g_strings[StrId_Max][16] =
             "Передача…\n"
             "%zu из %zu КИБ написано"
         ),
-        STR_ZH(
+        STR_ZH_HANS(
             "正在传输…\n"
             "已完成 %zu / %zu KiB"
         ),
-        STR_TW(
+        STR_ZH_HANT(
             "正在傳輸…\n"
             "已完成 %zu / %zu KiB"
         ),

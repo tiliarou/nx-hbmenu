@@ -51,6 +51,7 @@ struct menuEntry_s_tag
     MenuEntryType type;
 
     char path[PATH_MAX+8];
+    char starpath[PATH_MAX+8];
     argData_s args;
 
     bool fileassoc_type;//0=file_extension, 1 = filename
@@ -64,6 +65,8 @@ struct menuEntry_s_tag
     size_t icon_size;
     uint8_t *icon_gfx;
     uint8_t *icon_gfx_small;
+    
+    bool starred;
 
     NacpStruct *nacp;
 };
@@ -83,7 +86,7 @@ extern "C" {
 void menuEntryInit(menuEntry_s* me, MenuEntryType type);
 void menuEntryFree(menuEntry_s* me, bool skip_icongfx);
 bool fileExists(const char* path);
-bool menuEntryLoad(menuEntry_s* me, const char* name, bool shortcut);
+bool menuEntryLoad(menuEntry_s* me, const char* name, bool shortcut, bool check_exists);
 void menuEntryParseIcon(menuEntry_s* me);
 uint8_t *downscaleImg(const uint8_t *image, int srcWidth, int srcHeight, int destWidth, int destHeight, ImageMode mode);
 void menuEntryParseNacp(menuEntry_s* me);
@@ -97,11 +100,13 @@ void menuDeleteEntry(menuEntry_s* me, bool skip_icongfx);
 
 menu_s* menuGetCurrent(void);
 menu_s* menuFileassocGetCurrent(void);
+void menuReorder (void);
 int menuScan(const char* target);
 int themeMenuScan(const char* target);
 int menuFileassocScan(const char* target);
 
 void launchMenuEntryTask(menuEntry_s* arg);
+void toggleStarState(menuEntry_s* arg);
 void launchApplyThemeTask(menuEntry_s* arg);
 void launchMenuBackTask();
 void launchMenuNetloaderTask();
@@ -109,6 +114,7 @@ char *menuGetRootPath(void);
 char *menuGetRootBasePath(void);
 
 void menuHandleAButton(void);
+void menuHandleXButton(void);
 
 bool menuIsNetloaderActive(void);
 
